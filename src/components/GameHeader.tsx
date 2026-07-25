@@ -51,6 +51,10 @@ export function GameHeader({
 
   return (
     <header className="game-bar">
+      <p className="sr-only" aria-live="polite">
+        תור של {currentPlayerName}. {scoreDisplay}
+        {timeRemainingSeconds !== null ? `. נותרו ${formatTime(timeRemainingSeconds)}` : ''}
+      </p>
       <button
         type="button"
         className="game-bar__mute"
@@ -73,7 +77,7 @@ export function GameHeader({
           )}
         </div>
 
-        <div className="game-bar__center">
+        <div className="game-bar__center" aria-live="polite" aria-atomic="true">
           <span className="game-bar__score-label">{scoreDisplay}</span>
           {timeRemainingSeconds !== null && (
             <span className="game-bar__timer">⏱ {formatTime(timeRemainingSeconds)}</span>

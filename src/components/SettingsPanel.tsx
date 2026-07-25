@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { CustomContentPanel } from './CustomContentPanel';
+import { PrivacyPanel } from './PrivacyPanel';
+import { RadioGroup } from './RadioGroup';
 import { clearAllLocalData, loadHistory, loadRecords, loadUnlockedAchievements } from '../utils/storage';
+import { logoutSite } from '../utils/siteGate';
 import { ACHIEVEMENTS, AVATAR_OPTIONS, PLAYER_COLORS } from '../types/game';
 import type { AnimationStyle, AppSettings, BgTheme, FontChoice, SoundPack, SpinnerStyle } from '../types/game';
 
@@ -9,6 +12,7 @@ type SettingsPanelProps = {
   onUpdate: (partial: Partial<AppSettings>) => void;
   onResetScores: () => void;
   onBack: () => void;
+  buildVersion?: string;
 };
 
 const SPINNER_STYLES: { value: SpinnerStyle; label: string }[] = [
@@ -36,7 +40,7 @@ const SOUND_PACKS: { value: SoundPack; label: string }[] = [
   { value: 'playful', label: 'שמח' },
 ];
 
-export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: SettingsPanelProps) {
+export function SettingsPanel({ settings, onUpdate, onResetScores, onBack, buildVersion }: SettingsPanelProps) {
   const records = loadRecords();
   const history = loadHistory();
   const achievements = loadUnlockedAchievements();
@@ -96,41 +100,33 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
       </div>
 
       <div className="settings-group">
-        <span className="settings-label">עיצוב ספינר</span>
-        <div className="target-score-options">
-          {SPINNER_STYLES.map((s) => (
-            <button key={s.value} type="button" className={`target-score-btn ${settings.spinnerStyle === s.value ? 'target-score-btn--selected' : ''}`} onClick={() => onUpdate({ spinnerStyle: s.value })}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="settings-group">
-        <span className="settings-label">פונט</span>
-        <div className="target-score-options">
-          {FONTS.map((f) => (
-            <button key={f.value} type="button" className={`target-score-btn ${settings.fontChoice === f.value ? 'target-score-btn--selected' : ''}`} onClick={() => onUpdate({ fontChoice: f.value })}>
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <span className="settings-label">רקע</span>
-        <div className="target-score-options">
-          {BG_THEMES.map((b) => (
-            <button key={b.value} type="button" className={`target-score-btn ${settings.bgTheme === b.value ? 'target-score-btn--selected' : ''}`} onClick={() => onUpdate({ bgTheme: b.value })}>
-              {b.label}
-            </button>
-          ))}
-        </div>
-        <span className="settings-label">אנימציות</span>
-        <div className="target-score-options">
-          {(['full', 'reduced'] as AnimationStyle[]).map((a) => (
-            <button key={a} type="button" className={`target-score-btn ${settings.animationStyle === a ? 'target-score-btn--selected' : ''}`} onClick={() => onUpdate({ animationStyle: a })}>
-              {a === 'full' ? 'מלא' : 'מופחת'}
-            </button>
-          ))}
-        </div>
+        <RadioGroup
+          label="עיצוב ספינר"
+          value={settings.spinnerStyle}
+          options={SPINNER_STYLES}
+          onChange={(spinnerStyle) => onUpdate({ spinnerStyle })}
+        />
+        <RadioGroup
+          label="פונט"
+          value={settings.fontChoice}
+          options={FONTS}
+          onChange={(fontChoice) => onUpdate({ fontChoice })}
+        />
+        <RadioGroup
+          label="רקע"
+          value={settings.bgTheme}
+          options={BG_THEMES}
+          onChange={(bgTheme) => onUpdate({ bgTheme })}
+        />
+        <RadioGroup
+          label="אנימציות"
+          value={settings.animationStyle}
+          options={([
+            { value: 'full' as AnimationStyle, label: 'מלא' },
+            { value: 'reduced' as AnimationStyle, label: 'מופחת' },
+          ])}
+          onChange={(animationStyle) => onUpdate({ animationStyle })}
+        />
       </div>
 
       <div className="settings-group">
@@ -138,9 +134,19 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
           <span>שחקן 1</span>
           <input type="text" value={settings.playerOneName} onChange={(e) => onUpdate({ playerOneName: e.target.value })} />
         </label>
-        <div className="avatar-picker">
+        <div className="avatar-picker" role="radiogroup" aria-label="אווטאר שחקן 1">
           {AVATAR_OPTIONS.map((a) => (
-            <button key={a} type="button" className={`avatar-opt ${settings.playerOneAvatar === a ? 'selected' : ''}`} onClick={() => onUpdate({ playerOneAvatar: a })}>{a}</button>
+            <button
+              key={a}
+              type="button"
+              role="radio"
+              aria-checked={settings.playerOneAvatar === a}
+              tabIndex={settings.playerOneAvatar === a ? 0 : -1}
+              className={`avatar-opt ${settings.playerOneAvatar === a ? 'selected' : ''}`}
+              onClick={() => onUpdate({ playerOneAvatar: a })}
+            >
+              {a}
+            </button>
           ))}
         </div>
         <div className="color-picker" role="radiogroup" aria-label="צבע שחקן 1">
@@ -161,9 +167,19 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
           <span>שחקן 2</span>
           <input type="text" value={settings.playerTwoName} onChange={(e) => onUpdate({ playerTwoName: e.target.value })} />
         </label>
-        <div className="avatar-picker">
+        <div className="avatar-picker" role="radiogroup" aria-label="אווטאר שחקן 2">
           {AVATAR_OPTIONS.map((a) => (
-            <button key={`2-${a}`} type="button" className={`avatar-opt ${settings.playerTwoAvatar === a ? 'selected' : ''}`} onClick={() => onUpdate({ playerTwoAvatar: a })}>{a}</button>
+            <button
+              key={`2-${a}`}
+              type="button"
+              role="radio"
+              aria-checked={settings.playerTwoAvatar === a}
+              tabIndex={settings.playerTwoAvatar === a ? 0 : -1}
+              className={`avatar-opt ${settings.playerTwoAvatar === a ? 'selected' : ''}`}
+              onClick={() => onUpdate({ playerTwoAvatar: a })}
+            >
+              {a}
+            </button>
           ))}
         </div>
         <div className="color-picker" role="radiogroup" aria-label="צבע שחקן 2">
@@ -183,6 +199,7 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
       </div>
 
       <CustomContentPanel matureAgeConfirmed={settings.matureAgeConfirmed} />
+      <PrivacyPanel />
 
       <div className="settings-group records-box">
         <span className="settings-label">שיאים מקומיים</span>
@@ -217,6 +234,21 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
           מחיקת כל הנתונים
         </button>
         {cleared && <p className="history-hint">הנתונים נמחקו — מרענן...</p>}
+      </div>
+
+      <div className="settings-group">
+        <span className="settings-label">גרסת build</span>
+        <p className="history-hint">{buildVersion ?? 'dev'}</p>
+        <button
+          type="button"
+          className="secondary-action pressable"
+          onClick={() => {
+            void logoutSite();
+            window.location.reload();
+          }}
+        >
+          יציאה מהשער (logout)
+        </button>
       </div>
 
       <div className="modal-actions settings-actions">

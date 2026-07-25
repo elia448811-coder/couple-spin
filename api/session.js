@@ -1,14 +1,17 @@
 import {
   cors,
   isOriginAllowed,
+  isSessionDenied,
   json,
+  methodNotAllowed,
   readBody,
+  requestToken,
   sessionSigningSecret,
   verifySessionToken,
 } from './_lib/auth.js';
 
 export default async function handler(req, res) {
-  const headers = cors(req);
+  const headers = cors(req, ['GET', 'POST', 'OPTIONS']);
 
   if (req.method === 'OPTIONS') {
     if (!isOriginAllowed(req)) {
@@ -31,30 +34,28 @@ export default async function handler(req, res) {
     return;
   }
 
-  let token = '';
+  let body;
   if (req.method === 'GET') {
-    const auth = req.headers.authorization || '';
-    token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   } else if (req.method === 'POST') {
     try {
-      const body = await readBody(req);
-      token = String(body?.token ?? '').trim();
+      body = await readBody(req);
     } catch {
       json(res, 400, { ok: false, error: 'bad_request' }, headers);
       return;
     }
   } else {
-    json(res, 405, { ok: false, error: 'method_not_allowed' }, headers);
+    methodNotAllowed(res, ['GET', 'POST', 'OPTIONS'], headers);
     return;
   }
 
+  const token = requestToken(req, body);
   if (!token) {
     json(res, 401, { ok: false, error: 'missing_token' }, headers);
     return;
   }
 
   const valid = verifySessionToken(secret, token);
-  if (!valid) {
+  if (!valid || await isSessionDenied(token)) {
     json(res, 401, { ok: false, error: 'invalid_session' }, headers);
     return;
   }

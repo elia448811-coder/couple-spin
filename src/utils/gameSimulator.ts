@@ -33,6 +33,10 @@ export function createTestGameState(
     timeRemainingSeconds: null,
     timeDeadlineMs: null,
     finishEventId: null,
+    paused: false,
+    uiBlocked: false,
+    poolEmpty: false,
+    lastAction: null,
     stats: {
       totalCompleted: 0,
       totalSkipped: 0,

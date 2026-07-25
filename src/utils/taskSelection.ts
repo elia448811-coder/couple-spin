@@ -5,6 +5,7 @@ import { intimacyQuestions } from '../data/intimacyQuestions';
 import { matureQuestions, matureTasks } from '../data/matureContent';
 import { allTasks } from '../data/allTasks';
 import type { ContentMode, CoupleTask, GameMode, TaskCategory, TaskLevel } from '../types/game';
+import { isTaskHidden, taskAllowedByBoundaries } from './privacy';
 
 const MODE_CATEGORIES: Record<GameMode, TaskCategory[]> = {
   funny: ['funny', 'movement', 'creative'],
@@ -68,6 +69,8 @@ export function filterTasks(
         : ['easy', 'normal', 'advanced'];
 
   return getAllContent().filter((task: CoupleTask) => {
+    if (isTaskHidden(task.id)) return false;
+    if (!taskAllowedByBoundaries(task)) return false;
     if (task.category === 'spicy' && mode !== 'spicy') return false;
     if (mode === 'spicy' && task.category !== 'spicy') return false;
     if (!matchesContentMode(task, contentMode, mode)) return false;

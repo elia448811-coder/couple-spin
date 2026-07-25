@@ -94,7 +94,10 @@ export type GameStats = {
   funniestTaskId: string | null;
   funniestTaskTitle: string | null;
   startTime: number;
+  /** Round counter for end conditions (may equal tasks presented) */
   roundNumber: number;
+  /** Distinct from scoring rounds — how many cards were shown */
+  tasksPresented?: number;
 };
 
 export type GameState = {
@@ -129,6 +132,10 @@ export type GameState = {
   spinCategory: string | null;
   unlockedAchievements: string[];
   sessionNewAchievements: string[];
+  paused?: boolean;
+  uiBlocked?: boolean;
+  poolEmpty?: boolean;
+  lastAction?: 'complete' | 'skip' | 'replace' | null;
 };
 
 export type AchievementDef = {

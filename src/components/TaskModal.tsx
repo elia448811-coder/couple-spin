@@ -18,6 +18,8 @@ type TaskModalProps = {
   onTooEasy: () => void;
   onTooHard: () => void;
   onMarkFunniest: () => void;
+  onHideForever?: () => void;
+  onToggleFavorite?: () => void;
 };
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
@@ -38,8 +40,11 @@ export function TaskModal({
   onTooEasy,
   onTooHard,
   onMarkFunniest,
+  onHideForever,
+  onToggleFavorite,
 }: TaskModalProps) {
   const [extrasOpen, setExtrasOpen] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const lockedRef = useRef(false);
   const trapRef = useFocusTrap(true);
   const isQuestion = task.kind === 'question';
@@ -53,6 +58,7 @@ export function TaskModal({
 
   useEffect(() => {
     lockedRef.current = false;
+    setConfirmSkip(false);
   }, [task.id]);
 
   useEffect(() => {
@@ -60,10 +66,11 @@ export function TaskModal({
       if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (!lockedRef.current) {
-          lockedRef.current = true;
-          onSkip();
+        if (confirmSkip) {
+          setConfirmSkip(false);
+          return;
         }
+        setConfirmSkip(true);
         return;
       }
       // Enter רק כשלא על אלמנט אינטראקטיבי — מונע כפל פעולות
@@ -77,7 +84,14 @@ export function TaskModal({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onComplete, onSkip]);
+  }, [onComplete, confirmSkip]);
+
+  const doSkip = () => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    setConfirmSkip(false);
+    onSkip();
+  };
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -87,6 +101,7 @@ export function TaskModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-modal-title"
+        aria-describedby={confirmSkip ? 'task-skip-confirm' : undefined}
         tabIndex={-1}
       >
         <p className="task-modal__who">
@@ -120,14 +135,28 @@ export function TaskModal({
           <p className="task-duration">⏱ {task.durationSeconds} שניות</p>
         )}
 
-        <div className="task-modal__main-actions">
-          <button type="button" className="cta-button cta-button--modal pressable" onClick={onComplete}>
-            {isQuestion ? '✓ דיברנו על זה' : '✓ בוצע'}
-          </button>
-          <button type="button" className="task-modal__skip pressable" onClick={onSkip}>
-            דלג
-          </button>
-        </div>
+        {confirmSkip ? (
+          <div className="task-modal__skip-confirm" id="task-skip-confirm" role="alertdialog" aria-labelledby="task-skip-confirm">
+            <p>לדלג על המשימה?</p>
+            <div className="task-modal__main-actions">
+              <button type="button" className="cta-button cta-button--modal pressable" onClick={doSkip}>
+                כן, דלג
+              </button>
+              <button type="button" className="task-modal__skip pressable" onClick={() => setConfirmSkip(false)}>
+                ביטול
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="task-modal__main-actions">
+            <button type="button" className="cta-button cta-button--modal pressable" onClick={onComplete}>
+              {isQuestion ? '✓ דיברנו על זה' : '✓ בוצע'}
+            </button>
+            <button type="button" className="task-modal__skip pressable" onClick={doSkip}>
+              דלג
+            </button>
+          </div>
+        )}
 
         <button
           type="button"
@@ -161,6 +190,16 @@ export function TaskModal({
             >
               {isFunniest ? '⭐ נבחר!' : isQuestion ? '⭐ שאלה מועדפת' : '😂 הכי מצחיקה'}
             </button>
+            {onToggleFavorite && (
+              <button type="button" className="extra-btn pressable" onClick={onToggleFavorite}>
+                💜 מועדפים
+              </button>
+            )}
+            {onHideForever && (
+              <button type="button" className="extra-btn pressable" onClick={onHideForever}>
+                לא להציג שוב
+              </button>
+            )}
           </div>
         )}
       </div>

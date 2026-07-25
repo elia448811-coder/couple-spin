@@ -6,6 +6,7 @@ import {
   isOriginAllowed,
   json,
   MAX_PASSWORD_LEN,
+  methodNotAllowed,
   readBody,
   sessionSigningSecret,
   sitePassword,
@@ -13,7 +14,7 @@ import {
 } from './_lib/auth.js';
 
 export default async function handler(req, res) {
-  const headers = cors(req);
+  const headers = cors(req, ['POST', 'OPTIONS']);
 
   if (req.method === 'OPTIONS') {
     if (!isOriginAllowed(req)) {
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    json(res, 405, { ok: false, error: 'method_not_allowed' }, headers);
+    methodNotAllowed(res, ['POST', 'OPTIONS'], headers);
     return;
   }
 
@@ -36,7 +37,7 @@ export default async function handler(req, res) {
   }
 
   const ip = clientIp(req);
-  const rate = checkRateLimit(ip);
+  const rate = await checkRateLimit(ip);
   if (!rate.allowed) {
     json(
       res,
@@ -70,7 +71,16 @@ export default async function handler(req, res) {
 
   if (timingSafeEqual(input, expected)) {
     const session = createSessionToken(signing);
-    json(res, 200, { ok: true, token: session.token, expiresAt: session.expiresAt }, headers);
+    if (!session) {
+      json(res, 503, { ok: false, error: 'not_configured' }, headers);
+      return;
+    }
+    json(
+      res,
+      200,
+      { ok: true, token: session.token, expiresAt: session.expiresAt },
+      { ...headers, 'Set-Cookie': `couple_spin_session=${encodeURIComponent(session.token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${Math.floor((session.expiresAt - Date.now()) / 1000)}` },
+    );
     return;
   }
 

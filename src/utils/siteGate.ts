@@ -8,6 +8,7 @@ const ENV_API = (import.meta.env.VITE_AUTH_API_URL ?? '').replace(/\/$/, '');
 const USE_VERCEL_API = import.meta.env.VITE_SITE_GATE === 'true' || import.meta.env.VITE_SITE_GATE === '1';
 const AUTH_API = ENV_API || (USE_VERCEL_API ? '/api' : '');
 const SESSION_KEY = 'couple-spin-auth-session';
+const REQUEST_TIMEOUT_MS = 8_000;
 
 export type AuthSession = {
   token: string;
@@ -53,11 +54,21 @@ export function saveAuthSession(session: AuthSession): void {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
+async function authFetch(path: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(`${AUTH_API}${path}`, { ...init, credentials: 'same-origin', signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function validateAuthSession(token: string): Promise<'ok' | 'invalid' | 'network'> {
   if (!isSiteGateEnabled() || !token) return 'invalid';
 
   try {
-    const res = await fetch(`${AUTH_API}/session`, {
+    const res = await authFetch('/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -90,7 +101,7 @@ export async function verifySitePassword(input: string): Promise<VerifyResult> {
   if (!password) return { ok: false };
 
   try {
-    const res = await fetch(`${AUTH_API}/verify`, {
+    const res = await authFetch('/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
@@ -112,5 +123,20 @@ export async function verifySitePassword(input: string): Promise<VerifyResult> {
     return { ok: true };
   } catch {
     return { ok: false, networkError: true };
+  }
+}
+
+export async function logoutSite(): Promise<void> {
+  const token = readStoredSession()?.token;
+  clearAuthSession();
+  if (!isSiteGateEnabled()) return;
+  try {
+    await authFetch('/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(token ? { token } : {}),
+    });
+  } catch {
+    // Local state is cleared even when the server cannot be reached.
   }
 }

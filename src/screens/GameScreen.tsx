@@ -1,11 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { GameHeader } from '../components/GameHeader';
+import { PauseModal } from '../components/PauseModal';
 import { ProgressBar } from '../components/ProgressBar';
 import { SpinnerWheel } from '../components/SpinnerWheel';
 import { TaskModal } from '../components/TaskModal';
 import { useSpinWheel } from '../hooks/useSpinWheel';
 import { getSpinnerSegments } from '../types/game';
 import type { AppSettings, ContentMode, CoupleTask, GameState } from '../types/game';
+import { hideTaskForever, toggleFavorite } from '../utils/privacy';
+import { hasUndo } from '../utils/undoStack';
 
 type GameScreenProps = {
   settings: AppSettings;
@@ -23,6 +26,10 @@ type GameScreenProps = {
   onMarkFunniest: (task: CoupleTask) => void;
   onEndGame: () => void;
   onToggleSound: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onUndo: () => void;
+  onExitToHome: () => void;
 };
 
 export function GameScreen({
@@ -41,6 +48,10 @@ export function GameScreen({
   onMarkFunniest,
   onEndGame,
   onToggleSound,
+  onPause,
+  onResume,
+  onUndo,
+  onExitToHome,
 }: GameScreenProps) {
   const handleSpinEnd = useCallback(
     (segmentIndex: number) => onSpinEnd(segmentIndex),
@@ -74,7 +85,7 @@ export function GameScreen({
   ]);
 
   const handleSpin = () => {
-    if (game.isSpinning || game.currentTask || landed) return;
+    if (game.isSpinning || game.currentTask || landed || game.uiBlocked || game.paused) return;
     onStartSpin();
     spin();
   };
@@ -82,6 +93,16 @@ export function GameScreen({
   return (
     <section className="page-screen game-screen">
       <div className="game-card">
+        <div className="game-bar-extras" aria-live="polite">
+          <span>
+            סיבוב {game.stats.roundNumber + 1}
+            {effectiveTarget != null ? ` · יעד ${effectiveTarget}` : ''}
+          </span>
+          <button type="button" className="icon-btn pressable" onClick={onPause} aria-label="השהייה">
+            ⏸
+          </button>
+        </div>
+
         <GameHeader
           currentPlayerName={currentPlayerName}
           currentPlayerIndex={game.currentPlayerIndex}
@@ -114,6 +135,12 @@ export function GameScreen({
           }
         />
 
+        {game.poolEmpty && (
+          <p className="site-gate__error" role="status">
+            אין עוד תוכן שמתאים למסננים — נסו להחליף מצב או לאפס דילוגים
+          </p>
+        )}
+
         <SpinnerWheel
           isSpinning={game.isSpinning}
           rotation={rotation}
@@ -121,9 +148,17 @@ export function GameScreen({
           spinnerStyle={settings.spinnerStyle}
           gameMode={game.mode}
           segments={segments}
-          disabled={!!game.currentTask || game.isSpinning}
+          disabled={!!game.currentTask || game.isSpinning || !!game.uiBlocked || !!game.paused}
           onSpin={handleSpin}
         />
+
+        <div className="game-end-confirm__actions">
+          {hasUndo() && (
+            <button type="button" className="secondary-action pressable" onClick={onUndo}>
+              בטל פעולה
+            </button>
+          )}
+        </div>
 
         {!confirmEnd ? (
           <button type="button" className="game-end-link pressable" onClick={() => setConfirmEnd(true)}>
@@ -144,7 +179,19 @@ export function GameScreen({
         )}
       </div>
 
-      {game.currentTask && (
+      {game.paused && (
+        <PauseModal
+          onContinue={onResume}
+          onSettings={() => {
+            onResume();
+            onExitToHome();
+          }}
+          onRestart={onEndGame}
+          onExit={onExitToHome}
+        />
+      )}
+
+      {game.currentTask && !game.paused && (
         <TaskModal
           task={game.currentTask}
           currentPlayerName={currentPlayerName}
@@ -156,6 +203,11 @@ export function GameScreen({
           onTooEasy={onTooEasy}
           onTooHard={onTooHard}
           onMarkFunniest={() => onMarkFunniest(game.currentTask!)}
+          onHideForever={() => {
+            hideTaskForever(game.currentTask!.id);
+            onSkip();
+          }}
+          onToggleFavorite={() => toggleFavorite(game.currentTask!.id)}
         />
       )}
     </section>

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { AgeGateModal } from '../components/AgeGateModal';
+import { ConsentBoundsPanel } from '../components/ConsentBoundsPanel';
 import { LevelSelector } from '../components/LevelSelector';
 import type { ContentMode, GameFormat, GameMode, ScoringMode, TargetScore, TaskLevel } from '../types/game';
 import { CONTENT_MODE_LABELS, MODE_DESCRIPTIONS, MODE_LABELS } from '../types/game';
+import type { GamePreset } from '../utils/gameEvents';
 
 type QuickSetupScreenProps = {
   mode: GameMode;
@@ -17,6 +19,8 @@ type QuickSetupScreenProps = {
   playerOneName: string;
   playerTwoName: string;
   matureAgeConfirmed: boolean;
+  presets?: GamePreset[];
+  onApplyPreset?: (preset: GamePreset) => void;
   onModeSelect: (mode: GameMode) => void;
   onLevelSelect: (level: TaskLevel) => void;
   onContentModeChange: (mode: ContentMode) => void;
@@ -91,6 +95,8 @@ export function QuickSetupScreen({
   playerOneName,
   playerTwoName,
   matureAgeConfirmed,
+  presets = [],
+  onApplyPreset,
   onModeSelect,
   onLevelSelect,
   onContentModeChange,
@@ -107,6 +113,7 @@ export function QuickSetupScreen({
 }: QuickSetupScreenProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showAgeGate, setShowAgeGate] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   const vibe = deriveVibe(gameFormat, scoringMode);
   const showTarget = vibe !== 'chill';
   const isMature = mode === 'spicy';
@@ -117,19 +124,43 @@ export function QuickSetupScreen({
     onTargetScoreSelect(preset.target);
   };
 
+  const proceedAfterGates = () => onStart();
+
   const handleContinue = () => {
     if (isMature && !matureAgeConfirmed) {
       setShowAgeGate(true);
       return;
     }
-    onStart();
+    if (isMature) {
+      setShowConsent(true);
+      return;
+    }
+    proceedAfterGates();
   };
 
   const handleAgeConfirm = () => {
     onConfirmMatureAge();
     setShowAgeGate(false);
-    onStart();
+    setShowConsent(true);
   };
+
+  if (showConsent) {
+    return (
+      <section className="page-screen flow-screen setup-screen">
+        <div className="setup-card flow-card">
+          <ConsentBoundsPanel
+            playerOneName={playerOneName || 'שחקן 1'}
+            playerTwoName={playerTwoName || 'שחקן 2'}
+            onConfirm={() => {
+              setShowConsent(false);
+              proceedAfterGates();
+            }}
+            onCancel={() => setShowConsent(false)}
+          />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="page-screen flow-screen setup-screen">
@@ -152,6 +183,25 @@ export function QuickSetupScreen({
         </header>
 
         <div className="setup-body">
+          {presets.length > 0 && onApplyPreset && (
+            <section className="setup-block">
+              <h2 className="setup-label">התחלה מהירה</h2>
+              <div className="chip-scroll" role="list">
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="listitem"
+                    className="choice-chip pressable"
+                    onClick={() => onApplyPreset(preset)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="setup-block">
             <h2 className="setup-label">איזה וייב?</h2>
             <div className="chip-scroll" role="list">

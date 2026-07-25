@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { InstallPWABanner } from '../components/InstallPWABanner';
 import { BackgroundGlow } from '../components/BackgroundGlow';
 import { FloatingParticles } from '../components/FloatingParticles';
@@ -7,6 +7,7 @@ import { useDeviceLayout } from '../hooks/useDeviceLayout';
 import { useGameState } from '../hooks/useGameState';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import type { Screen } from '../types/game';
+import { isDiscreteMode } from '../utils/privacy';
 import '../styles/globals.css';
 import '../styles/responsive.css';
 import '../styles/friendly.css';
@@ -66,9 +67,25 @@ function AppContent() {
     playAgain,
     resetScores,
     toggleSound,
+    pauseGame,
+    resumeGame,
+    undoLast,
+    applyPreset,
+    presets,
+    resumeAvailable,
+    restoreSnapshot,
+    buildVersion,
   } = useGameState();
 
   const isGame = game.screen === 'game';
+
+  useEffect(() => {
+    const discrete = isDiscreteMode();
+    document.title = discrete ? 'Notes' : 'ספין זוגי | Couple Spin';
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]');
+    if (icon) icon.href = discrete ? '/favicon.svg' : '/favicon.svg';
+    document.documentElement.dataset.discrete = discrete ? 'true' : 'false';
+  }, [settings]);
 
   return (
     <main className={`app-shell ${isGame ? 'app-shell--focus' : ''}`} dir="rtl">
@@ -78,10 +95,19 @@ function AppContent() {
 
       <Suspense fallback={<ScreenFallback />}>
         {game.screen === 'welcome' && (
-          <WelcomeScreen
-            onStart={go(navigate, 'setup')}
-            onSettings={go(navigate, 'settings')}
-          />
+          <>
+            {resumeAvailable && (
+              <div className="resume-banner" dir="rtl">
+                <button type="button" className="primary-action pressable" onClick={restoreSnapshot}>
+                  המשך משחק שמור
+                </button>
+              </div>
+            )}
+            <WelcomeScreen
+              onStart={go(navigate, 'setup')}
+              onSettings={go(navigate, 'settings')}
+            />
+          </>
         )}
 
         {game.screen === 'setup' && (
@@ -98,6 +124,8 @@ function AppContent() {
             playerOneName={game.playerOneName}
             playerTwoName={game.playerTwoName}
             matureAgeConfirmed={settings.matureAgeConfirmed}
+            presets={presets}
+            onApplyPreset={applyPreset}
             onModeSelect={setMode}
             onLevelSelect={setLevel}
             onContentModeChange={setContentMode}
@@ -147,6 +175,10 @@ function AppContent() {
             onMarkFunniest={markFunniest}
             onEndGame={endGame}
             onToggleSound={toggleSound}
+            onPause={pauseGame}
+            onResume={resumeGame}
+            onUndo={undoLast}
+            onExitToHome={go(navigate, 'welcome')}
           />
         )}
 
@@ -166,6 +198,7 @@ function AppContent() {
             onUpdate={updateSettings}
             onResetScores={resetScores}
             onBack={go(navigate, 'welcome')}
+            buildVersion={buildVersion}
           />
         )}
       </Suspense>

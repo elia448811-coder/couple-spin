@@ -6,6 +6,7 @@ type SettingsScreenProps = {
   onUpdate: (partial: Partial<AppSettings>) => void;
   onResetScores: () => void;
   onBack: () => void;
+  buildVersion?: string;
 };
 
 export function SettingsScreen({
@@ -13,6 +14,7 @@ export function SettingsScreen({
   onUpdate,
   onResetScores,
   onBack,
+  buildVersion,
 }: SettingsScreenProps) {
   return (
     <section className="page-screen flow-screen settings-screen">
@@ -31,6 +33,7 @@ export function SettingsScreen({
           onUpdate={onUpdate}
           onResetScores={onResetScores}
           onBack={onBack}
+          buildVersion={buildVersion}
         />
       </div>
     </section>

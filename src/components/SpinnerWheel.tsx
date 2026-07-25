@@ -45,6 +45,9 @@ export function SpinnerWheel({
         ▼
       </div>
       {landed && <div className="wheel-flash" aria-hidden="true" />}
+      <p className="sr-only" aria-live="polite">
+        {isSpinning ? 'הגלגל מסתובב' : landed ? 'הגלגל נעצר' : 'מוכנים לסובב'}
+      </p>
 
       <div className={`wheel-frame wheel-frame--${spinnerStyle}`}>
         <div

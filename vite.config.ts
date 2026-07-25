@@ -11,8 +11,15 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['favicon.svg', 'robots.txt'],
+        registerType: 'prompt',
+        includeAssets: [
+          'favicon.svg',
+          'robots.txt',
+          'pwa-192.png',
+          'pwa-512.png',
+          'pwa-maskable-512.png',
+          'apple-touch-icon.png',
+        ],
         manifest: {
           name: 'ספין זוגי | Couple Spin',
           short_name: 'ספין זוגי',
@@ -26,23 +33,29 @@ export default defineConfig(({ mode }) => {
           start_url: base,
           scope: base,
           icons: [
+            { src: `${base}pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: `${base}pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
             {
-              src: `${base}favicon.svg`,
-              sizes: '192x192',
-              type: 'image/svg+xml',
-              purpose: 'any maskable',
-            },
-            {
-              src: `${base}favicon.svg`,
+              src: `${base}pwa-maskable-512.png`,
               sizes: '512x512',
-              type: 'image/svg+xml',
-              purpose: 'any maskable',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+          screenshots: [
+            {
+              src: `${base}pwa-512.png`,
+              sizes: '512x512',
+              type: 'image/png',
+              form_factor: 'narrow',
+              label: 'מסך משחק',
             },
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,svg,woff2,webmanifest}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
           navigateFallback: `${base}index.html`,
+          navigateFallbackDenylist: [/^\/api\//],
         },
       }),
     ],
