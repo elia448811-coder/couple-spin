@@ -1,5 +1,5 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v29_ADMIN_UID_OR_EMAIL
+// DOUBLE_GAME_RULES_v30_ADMIN_CONSOLE
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
@@ -266,24 +266,34 @@ service cloud.firestore {
 
     // Root user account document
     match /users/{userId} {
-      allow read: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
       allow create: if isAuth()
         && request.auth.uid == userId
         && validUserProfile();
       allow update: if isAuth()
-        && request.auth.uid == userId
         && unchanged('uid')
         && unchanged('createdAtMs')
         && (
-          validUserProfile()
-          || request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['lastSeenMs', 'updatedAtMs', 'updatedAt', 'gamesPlayed', 'lastRoomId'])
+          (
+            request.auth.uid == userId
+            && (
+              validUserProfile()
+              || request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['lastSeenMs', 'updatedAtMs', 'updatedAt', 'gamesPlayed', 'lastRoomId'])
+            )
+          )
+          || (
+            isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['banned', 'adminNote', 'displayName', 'updatedAtMs', 'updatedAt'])
+          )
         );
       allow delete: if false;
     }
 
     match /users/{userId}/{document=**} {
-      allow read, write: if isAuth() && request.auth.uid == userId;
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAuth() && request.auth.uid == userId;
     }
 
     match /rateLimits/{uid} {

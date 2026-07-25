@@ -1,13 +1,6 @@
-הדביקו מחדש (גרסה v29):
+הדביקו מחדש לניהול משתמשים (v30):
 
 קובץ: F:\GAMED\הדבק-עכשיו-Rules-מלא.txt
 Firebase → Firestore → Rules → מחקו הכול → הדביקו → Publish
 
-חובה לראות: DOUBLE_GAME_RULES_v29_ADMIN_UID_OR_EMAIL
-
-אדמין מזוהה לפי:
-- אימייל: elia448811@gmail.com
-- או UID: tpbKWXtXWFapFC7Fd80Wd4IMqxC2
-
-באתר (לא בקונסול Firebase):
-התחברות עם האימייל → הגדרות → פתיחת לוח ניהול
+חובה לראות: DOUBLE_GAME_RULES_v30_ADMIN_CONSOLE
