@@ -1,17 +1,13 @@
-חובה — Rules עם מזהה אדמין קשיח:
+הדביקו מחדש (גרסה v29):
 
-1. פתחו F:\GAMED\PASTE-FIREBASE-RULES.txt
-2. סמנו הכול → העתיקו
-3. Firebase → Firestore → Rules → Publish
-4. חובה לראות: DOUBLE_GAME_RULES_v28_ADMIN_UID
+קובץ: F:\GAMED\הדבק-עכשיו-Rules-מלא.txt
+Firebase → Firestore → Rules → מחקו הכול → הדביקו → Publish
 
-האדמין היחיד (לפי מזהה Auth, אי אפשר לזייף):
-  UID: tpbKWXtXWFapFC7Fd80Wd4IMqxC2
-  אימייל (לכניסה): elia448811@gmail.com
+חובה לראות: DOUBLE_GAME_RULES_v29_ADMIN_UID_OR_EMAIL
 
-כל כתיבה לניהול נבדקת פעמיים:
-  1) באפליקציה — assertAdmin() מול ה-UID מהתחברות Firebase
-  2) במאגר — isAdmin() ב-Rules מול request.auth.uid
+אדמין מזוהה לפי:
+- אימייל: elia448811@gmail.com
+- או UID: tpbKWXtXWFapFC7Fd80Wd4IMqxC2
 
-ב-Vercel / .env.local:
-  VITE_ADMIN_UID=tpbKWXtXWFapFC7Fd80Wd4IMqxC2
+באתר (לא בקונסול Firebase):
+התחברות עם האימייל → הגדרות → פתיחת לוח ניהול

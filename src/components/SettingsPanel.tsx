@@ -249,10 +249,10 @@ export function SettingsPanel({
       <UserAccountPanel />
 
       {isAdmin && onOpenAdmin && (
-        <section className="settings-group">
+        <section className="settings-group" style={{ outline: '2px solid var(--accent, #e85d8a)', borderRadius: 16, padding: 12 }}>
           <h2 className="settings-label">ניהול מערכת</h2>
           <p className="custom-content-panel__hint">
-            עריכת שאלות, עמוד כניסה, הרשמה ומנהלים.
+            מחוברים כאדמין — כאן עורכים שאלות, עמוד כניסה והרשמה.
           </p>
           <button type="button" className="primary-action pressable" onClick={onOpenAdmin}>
             פתיחת לוח ניהול

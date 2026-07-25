@@ -32,3 +32,5 @@ dist-ssr
 .env*
 test-users.local.json
 *.local.json
+service-account.local.json
+*-firebase-adminsdk*.json

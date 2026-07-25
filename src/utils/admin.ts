@@ -1,9 +1,9 @@
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
 
-/** Sole permanent admin UID (Firebase Auth) — source of truth for privilege checks. */
+/** Locked admin UID (if this matches the Gmail account). */
 export const SOLE_ADMIN_UID_DEFAULT = 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2';
 
-/** Kept for login UX — admin may sign in with this email; privilege is still UID-based. */
+/** Locked admin email — also grants admin (Auth token email cannot be spoofed). */
 export const SOLE_ADMIN_EMAIL = 'elia448811@gmail.com';
 
 export function getSoleAdminUid(): string {
@@ -22,30 +22,40 @@ export function isSoleAdminEmail(email: string | null | undefined): boolean {
   return (email ?? '').trim().toLowerCase() === SOLE_ADMIN_EMAIL;
 }
 
-export async function getCurrentUid(): Promise<string | null> {
+export function isSoleAdminIdentity(uid: string | null | undefined, email: string | null | undefined): boolean {
+  return isSoleAdminUid(uid) || isSoleAdminEmail(email);
+}
+
+export async function getCurrentAuthIdentity(): Promise<{ uid: string; email: string | null } | null> {
   if (!isFirebaseConfigured()) return null;
   const auth = await getFirebaseAuth();
   const user = auth?.currentUser;
   if (!user || user.isAnonymous) return null;
-  return user.uid;
+  return { uid: user.uid, email: user.email };
 }
 
-/** True only when Firebase Auth session UID matches the locked admin UID. */
+export async function getCurrentUid(): Promise<string | null> {
+  const id = await getCurrentAuthIdentity();
+  return id?.uid ?? null;
+}
+
+/** Admin if Auth UID or Auth email matches the locked sole admin. */
 export async function isCurrentUserAdmin(): Promise<boolean> {
-  const uid = await getCurrentUid();
-  return isSoleAdminUid(uid);
+  const id = await getCurrentAuthIdentity();
+  if (!id) return false;
+  return isSoleAdminIdentity(id.uid, id.email);
 }
 
 /**
- * Call before every admin write. Relies on Auth UID from Firebase SDK
- * (cannot be spoofed — token verified by Firestore rules as well).
+ * Call before every admin write. Uses Firebase Auth session
+ * (UID/email from token — verified again by Firestore rules).
  */
 export async function assertAdmin(): Promise<string> {
-  const uid = await getCurrentUid();
-  if (!isSoleAdminUid(uid)) {
+  const id = await getCurrentAuthIdentity();
+  if (!id || !isSoleAdminIdentity(id.uid, id.email)) {
     throw new Error('אין הרשאת מנהל — הבקשה נדחתה.');
   }
-  return uid!;
+  return id.uid;
 }
 
 export async function ensureAdminBootstrap(): Promise<boolean> {

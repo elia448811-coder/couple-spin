@@ -29,6 +29,8 @@
     "ensure:test-users": "node scripts/ensure-test-users.mjs",
     "seed:admin": "node scripts/seed-admin-config.mjs",
     "ensure:sole-admin": "node scripts/ensure-sole-admin.mjs",
+    "set:admin-password": "node scripts/set-admin-password.mjs",
+    "send:admin-reset": "node scripts/send-admin-reset-email.mjs",
     "export:questions": "node scripts/export-questions.mjs",
     "deploy:firestore": "node scripts/deploy-firestore.mjs",
     "prebuild": "node scripts/generate-pwa-icons.mjs"

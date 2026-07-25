@@ -1,15 +1,20 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v28_ADMIN_UID - sole admin UID tpbKWXtXWFapFC7Fd80Wd4IMqxC2
+// DOUBLE_GAME_RULES_v29_ADMIN_UID_OR_EMAIL
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
       return request.auth != null;
     }
 
-    // Hard-locked sole admin by Firebase Auth UID (cannot be spoofed from the client).
+    // Sole admin: locked UID and/or locked email from Auth token (not spoofable).
     function isAdmin() {
-      return isAuth()
-        && request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2';
+      return isAuth() && (
+        request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'
+        || (
+          request.auth.token.email is string
+          && request.auth.token.email.lower() == 'elia448811@gmail.com'
+        )
+      );
     }
 
     function roomDoc(roomId) {
