@@ -77,7 +77,7 @@ function hashedKey(prefix, value) {
   return `${prefix}:${createHash('sha256').update(String(value)).digest('hex')}`;
 }
 
-function memoryRateLimit(ip) {
+function memoryRateLimit(ip, maxAttempts = RATE_MAX_ATTEMPTS) {
   const now = Date.now();
   if (rateByKey.size >= 500) for (const [key, entry] of rateByKey) if (now > entry.resetAt) rateByKey.delete(key);
   const key = hashedKey('rate', ip);
@@ -85,7 +85,7 @@ function memoryRateLimit(ip) {
   if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
   entry.count += 1;
   rateByKey.set(key, entry);
-  const over = entry.count - RATE_MAX_ATTEMPTS;
+  const over = entry.count - maxAttempts;
   return over > 0
     ? { allowed: false, retryAfterSec: Math.max(Math.min(900, 30 * 2 ** Math.min(over, 5)), Math.ceil((entry.resetAt - now) / 1000)) }
     : { allowed: true, retryAfterSec: 0 };
@@ -103,18 +103,20 @@ async function upstash(command) {
 }
 
 /** Upstash-backed when configured; local fallback keeps development usable. */
-export async function checkRateLimit(ip) {
+export async function checkRateLimit(ip, options = {}) {
+  const maxAttempts = Number(options.maxAttempts) > 0 ? Number(options.maxAttempts) : RATE_MAX_ATTEMPTS;
+  const prefix = typeof options.prefix === 'string' && options.prefix ? options.prefix : 'auth-rate';
   try {
-    const key = hashedKey('auth-rate', ip);
+    const key = hashedKey(prefix, ip);
     const count = Number(await upstash(['incr', key]));
-    if (!Number.isFinite(count)) return memoryRateLimit(ip);
+    if (!Number.isFinite(count)) return memoryRateLimit(`${prefix}:${ip}`, maxAttempts);
     if (count === 1) await upstash(['expire', key, String(Math.ceil(RATE_WINDOW_MS / 1000))]);
-    const over = count - RATE_MAX_ATTEMPTS;
+    const over = count - maxAttempts;
     return over > 0
       ? { allowed: false, retryAfterSec: Math.min(900, 30 * 2 ** Math.min(over, 5)) }
       : { allowed: true, retryAfterSec: 0 };
   } catch {
-    return memoryRateLimit(ip);
+    return memoryRateLimit(`${prefix}:${ip}`, maxAttempts);
   }
 }
 

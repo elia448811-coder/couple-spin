@@ -75,6 +75,7 @@ export function loadCustomContent(): CustomContentItem[] {
 function saveCustomContent(items: CustomContentItem[]): { ok: boolean } {
   try {
     localStorage.setItem(CUSTOM_CONTENT_KEY, JSON.stringify(items));
+    void import('./cloudSync').then(({ scheduleCloudPush }) => scheduleCloudPush());
     return { ok: true };
   } catch {
     return { ok: false };

@@ -4,6 +4,8 @@ import { StatsSummary } from '../components/GameHeader';
 import { ACHIEVEMENTS, END_PHRASES } from '../types/game';
 import type { AppSettings, GameState } from '../types/game';
 import { buildEndShareData, generateShareImage, shareGameResult } from '../utils/share';
+import { buildEveningRecap } from '../utils/surpriseEvening';
+import { getLatestEveningRating, saveEveningRating } from '../utils/taskFeedback';
 
 type EndScreenProps = {
   game: GameState;
@@ -15,6 +17,9 @@ type EndScreenProps = {
 
 export function EndScreen({ game, settings, onNewGame, onPlayAgain, onHome }: EndScreenProps) {
   const [sharing, setSharing] = useState(false);
+  const [eveningStars, setEveningStars] = useState<number | null>(() =>
+    getLatestEveningRating(game.eveningName),
+  );
 
   const winnerName =
     game.winner === 0
@@ -35,6 +40,16 @@ export function EndScreen({ game, settings, onNewGame, onPlayAgain, onHome }: En
 
   const newAchievements = ACHIEVEMENTS.filter((a) =>
     game.sessionNewAchievements.includes(a.id),
+  );
+
+  const recap = useMemo(
+    () =>
+      buildEveningRecap({
+        stats: game.stats,
+        eveningName: game.eveningName,
+        contentMode: game.contentMode,
+      }),
+    [game.stats, game.eveningName, game.contentMode],
   );
 
   const handleShare = async () => {
@@ -112,6 +127,39 @@ export function EndScreen({ game, settings, onNewGame, onPlayAgain, onHome }: En
             <strong>{durationMinutes}</strong>
             <span>דקות</span>
           </div>
+        </div>
+
+        <div className="evening-recap">
+          <h2 className="evening-recap__title">✨ {recap.title}</h2>
+          <ul className="evening-recap__list">
+            {recap.lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="evening-rating">
+          <p className="setup-label">איך היה הערב?</p>
+          <div className="evening-rating__stars" role="radiogroup" aria-label="דירוג הערב">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                role="radio"
+                aria-checked={eveningStars === star}
+                className={`evening-rating__star pressable ${eveningStars != null && eveningStars >= star ? 'evening-rating__star--on' : ''}`}
+                onClick={() => {
+                  setEveningStars(star);
+                  saveEveningRating(game.eveningName, star);
+                }}
+              >
+                ⭐
+              </button>
+            ))}
+          </div>
+          {eveningStars != null && (
+            <p className="history-hint">תודה! שמרנו את הדירוג ({eveningStars}/5)</p>
+          )}
         </div>
 
         {newAchievements.length > 0 && (

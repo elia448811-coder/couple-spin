@@ -239,7 +239,7 @@ export default {
 
     if (url.pathname === '/health') {
       if (request.method !== 'GET') return methodNotAllowed(['GET', 'OPTIONS'], cors);
-      return json({ ok: true, gate: Boolean(sitePassword(env)), sessionTtlHours: 24 }, 200, cors);
+      return json({ ok: true }, 200, cors);
     }
 
     if (url.pathname === '/session') {

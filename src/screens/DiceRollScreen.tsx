@@ -96,9 +96,17 @@ export function DiceRollScreen({
             →
           </button>
           <div>
-            <p className="flow-kicker">לפני שמתחילים</p>
-            <h1 className="flow-title">🎲 מי מתחיל?</h1>
-            <p className="flow-desc">מגלגלים קובייה — המספר הנמוך יותר פותח</p>
+            <p className="flow-kicker">הכנה אחרונה</p>
+            <h1 className="flow-title">
+              {phase === 'result' && winnerName
+                ? `${winnerName} מתחיל/ה`
+                : 'הכול מוכן לערב שלכם'}
+            </h1>
+            <p className="flow-desc">
+              {phase === 'result'
+                ? 'לחצו להתחיל — או גלגלו שוב'
+                : 'נשאר רק לקבוע מי מתחיל'}
+            </p>
           </div>
         </header>
 
@@ -197,7 +205,7 @@ export function DiceRollScreen({
                 className="cta-button pressable"
                 onClick={() => onStart(firstPlayer)}
               >
-                🎡 יאללה למשחק!
+                מתחילים
               </button>
               <button type="button" className="flow-link pressable" onClick={performRoll}>
                 גלגלו שוב

@@ -14,21 +14,21 @@ import type {
 import { getEffectiveTarget, getSpinnerSegments } from '../types/game';
 import { GAME_PRESETS, type GameEffect, type GamePreset } from '../utils/gameEvents';
 import { emptyStats, gameReducer } from '../utils/gameReducer';
-import { finishPayload } from '../utils/gameFinish';
 import { pickEasierTask, pickHarderTask } from '../utils/taskSelection';
 import { pickTaskWithFallback, spinPickOptions } from '../utils/pickTaskWithFallback';
 import { clearSnapshot, loadSnapshot, saveSnapshot } from '../utils/gameSnapshot';
 import { hasUndo, popUndo, pushUndo } from '../utils/undoStack';
-import { isGuestMode, isTaskHidden, pruneHistory } from '../utils/privacy';
+import { isGuestMode, isTaskHidden } from '../utils/privacy';
 import {
-  loadHistory,
-  loadRecords,
+  pullCloudSnapshot,
+  scheduleCloudPush,
+  syncCloudOnStartup,
+} from '../utils/cloudSync';
+import { persistGameFinish } from '../utils/finishPersistence';
+import {
   loadSettings,
   loadUnlockedAchievements,
-  saveHistoryEntry,
   saveSettings,
-  saveUnlockedAchievements,
-  updateRecords,
 } from '../utils/storage';
 import { sounds, startBackgroundMusic, stopBackgroundMusic } from '../utils/sound';
 import { useApplyTheme } from './useSpinWheel';
@@ -102,7 +102,10 @@ function runEffects(
     if (effect.type === 'persist_settings') {
       ctx.setSettings((prev) => {
         const next = { ...prev, ...effect.patch } as AppSettings;
-        if (!isGuestMode()) saveSettings(next);
+        if (!isGuestMode()) {
+          saveSettings(next);
+          scheduleCloudPush();
+        }
         return next;
       });
     }
@@ -112,22 +115,8 @@ function runEffects(
       if (processedFinishIds.has(effect.finishEventId)) continue;
       processedFinishIds.add(effect.finishEventId);
       if (isGuestMode()) continue;
-      const payload = finishPayload({ ...ctx.game, finishEventId: effect.finishEventId });
-      if (payload.achievements.length) saveUnlockedAchievements(payload.achievements);
-      saveHistoryEntry(payload.history);
-      const pruned = pruneHistory(loadHistory(), 90);
-      try {
-        localStorage.setItem('couple-spin-history', JSON.stringify(pruned));
-      } catch {
-        /* ignore */
-      }
-      const records = loadRecords();
-      updateRecords({
-        totalGames: records.totalGames + 1,
-        mostCompleted: Math.max(payload.stats.totalCompleted, records.mostCompleted),
-        longestStreak: Math.max(payload.stats.maxStreak, records.longestStreak),
-        totalTasks: records.totalTasks + payload.stats.totalCompleted,
-      });
+      persistGameFinish({ ...ctx.game, finishEventId: effect.finishEventId }, effect.finishEventId);
+      scheduleCloudPush();
     }
   }
 }
@@ -139,11 +128,32 @@ export function useGameState() {
     return snap ?? createInitialGameState(loadSettings());
   });
   const [resumeAvailable] = useState(() => Boolean(loadSnapshot()));
+  const [cloudResume, setCloudResume] = useState<GameState | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gameRef = useRef(game);
+  const remoteVersionRef = useRef(0);
   gameRef.current = game;
 
   useApplyTheme(settings);
+
+  useEffect(() => {
+    if (isGuestMode()) return;
+    let cancelled = false;
+    void syncCloudOnStartup().then(() => {
+      if (cancelled) return;
+      setSettings(loadSettings());
+      setGame((prev) => ({
+        ...prev,
+        unlockedAchievements: loadUnlockedAchievements(),
+      }));
+    });
+    void pullCloudSnapshot().then((snap) => {
+      if (!cancelled && snap) setCloudResume(snap);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const dispatch = useCallback(
     (event: Parameters<typeof gameReducer>[1]) => {
@@ -217,7 +227,10 @@ export function useGameState() {
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
-      if (!isGuestMode()) saveSettings(next);
+      if (!isGuestMode()) {
+        saveSettings(next);
+        scheduleCloudPush();
+      }
       return next;
     });
     if (partial.playerOneName !== undefined || partial.playerTwoName !== undefined) {
@@ -362,6 +375,15 @@ export function useGameState() {
       const snap = loadSnapshot();
       if (snap) dispatch({ type: 'RESTORE_SNAPSHOT', snapshot: snap });
     },
+    restoreCloudSnapshot: () => {
+      if (cloudResume) dispatch({ type: 'RESTORE_SNAPSHOT', snapshot: cloudResume });
+    },
+    applyRemoteSnapshot: (snapshot: GameState, version: number) => {
+      if (version <= remoteVersionRef.current) return;
+      remoteVersionRef.current = version;
+      dispatch({ type: 'RESTORE_SNAPSHOT', snapshot });
+    },
+    cloudResumeAvailable: Boolean(cloudResume),
     newGame: () =>
       dispatch({
         type: 'NEW_GAME',

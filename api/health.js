@@ -1,4 +1,4 @@
-import { cors, json, methodNotAllowed, sitePassword } from './_lib/auth.js';
+import { cors, json, methodNotAllowed } from './_lib/auth.js';
 
 export default function handler(req, res) {
   const headers = cors(req, ['GET', 'OPTIONS']);
@@ -11,5 +11,6 @@ export default function handler(req, res) {
     methodNotAllowed(res, ['GET', 'OPTIONS'], headers);
     return;
   }
-  json(res, 200, { ok: true, gate: Boolean(sitePassword()), sessionTtlHours: 24 }, headers);
+  // Minimal probe — no internals about gate / rate-limit backends.
+  json(res, 200, { ok: true }, headers);
 }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GameHeader } from '../components/GameHeader';
 import { PauseModal } from '../components/PauseModal';
 import { ProgressBar } from '../components/ProgressBar';
@@ -8,6 +8,7 @@ import { useSpinWheel } from '../hooks/useSpinWheel';
 import { getSpinnerSegments } from '../types/game';
 import type { AppSettings, ContentMode, CoupleTask, GameState } from '../types/game';
 import { hideTaskForever, toggleFavorite } from '../utils/privacy';
+import { getTaskFeedback, setTaskFeedback } from '../utils/taskFeedback';
 import { hasUndo } from '../utils/undoStack';
 
 type GameScreenProps = {
@@ -30,6 +31,7 @@ type GameScreenProps = {
   onResume: () => void;
   onUndo: () => void;
   onExitToHome: () => void;
+  spectatorMode?: boolean;
 };
 
 export function GameScreen({
@@ -52,6 +54,7 @@ export function GameScreen({
   onResume,
   onUndo,
   onExitToHome,
+  spectatorMode = false,
 }: GameScreenProps) {
   const handleSpinEnd = useCallback(
     (segmentIndex: number) => onSpinEnd(segmentIndex),
@@ -84,7 +87,18 @@ export function GameScreen({
     game.scores,
   ]);
 
+  const [taskRating, setTaskRating] = useState<'up' | 'down' | null>(null);
+
+  useEffect(() => {
+    if (!game.currentTask) {
+      setTaskRating(null);
+      return;
+    }
+    setTaskRating(getTaskFeedback(game.currentTask.id));
+  }, [game.currentTask?.id]);
+
   const handleSpin = () => {
+    if (spectatorMode) return;
     if (game.isSpinning || game.currentTask || landed || game.uiBlocked || game.paused) return;
     onStartSpin();
     spin();
@@ -93,6 +107,12 @@ export function GameScreen({
   return (
     <section className="page-screen game-screen">
       <div className="game-card">
+        {spectatorMode && (
+          <div className="partner-spectator-banner" role="status">
+            👀 מצב צפייה — רואים את המשחק בזמן אמת מהשותף/ה
+          </div>
+        )}
+
         <div className="game-bar-extras" aria-live="polite">
           <span>
             סיבוב {game.stats.roundNumber + 1}
@@ -148,23 +168,24 @@ export function GameScreen({
           spinnerStyle={settings.spinnerStyle}
           gameMode={game.mode}
           segments={segments}
-          disabled={!!game.currentTask || game.isSpinning || !!game.uiBlocked || !!game.paused}
+          disabled={spectatorMode || !!game.currentTask || game.isSpinning || !!game.uiBlocked || !!game.paused}
           onSpin={handleSpin}
         />
 
         <div className="game-end-confirm__actions">
-          {hasUndo() && (
+          {!spectatorMode && hasUndo() && (
             <button type="button" className="secondary-action pressable" onClick={onUndo}>
               בטל פעולה
             </button>
           )}
         </div>
 
-        {!confirmEnd ? (
+        {!spectatorMode && !confirmEnd && (
           <button type="button" className="game-end-link pressable" onClick={() => setConfirmEnd(true)}>
             סיום משחק
           </button>
-        ) : (
+        )}
+        {!spectatorMode && confirmEnd && (
           <div className="game-end-confirm">
             <p>לסיים את המשחק עכשיו?</p>
             <div className="game-end-confirm__actions">
@@ -197,6 +218,16 @@ export function GameScreen({
           currentPlayerName={currentPlayerName}
           isCoupleTask={game.coupleTaskMode}
           isFunniest={game.stats.funniestTaskId === game.currentTask.id}
+          readOnly={spectatorMode}
+          taskFeedback={taskRating}
+          onTaskFeedback={
+            spectatorMode
+              ? undefined
+              : (rating) => {
+                  setTaskFeedback(game.currentTask!.id, rating);
+                  setTaskRating(rating);
+                }
+          }
           onComplete={onComplete}
           onSkip={onSkip}
           onReplaceTask={onReplaceTask}

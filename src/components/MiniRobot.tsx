@@ -257,14 +257,8 @@ export function MiniRobot({ game, settings, effectiveTarget, soundEnabled }: Min
         aria-expanded={open}
       >
         <span className="mini-robot__fab-icon">{open ? '✕' : '🤖'}</span>
-        {!open && (
-          <>
-            <span className="mini-robot__fab-pulse" />
-            <span className="mini-robot__fab-badge" aria-hidden>
-              ⚖️
-            </span>
-          </>
-        )}
+        {!open && <span className="mini-robot__fab-label">צריכים עזרה?</span>}
+        {!open && <span className="mini-robot__fab-pulse" />}
       </button>
     </div>
   );

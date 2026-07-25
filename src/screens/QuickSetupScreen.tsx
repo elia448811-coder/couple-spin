@@ -170,17 +170,36 @@ export function QuickSetupScreen({
         onCancel={() => setShowAgeGate(false)}
       />
 
-      <div className="setup-card flow-card">
+      <div className="setup-card flow-card animate-in">
         <header className="flow-header setup-header">
           <button type="button" className="icon-btn" onClick={onBack} aria-label="חזרה">
             →
           </button>
           <div>
-            <p className="flow-kicker">שלב 1 מתוך 2 · קל ומהיר</p>
-            <h1 className="flow-title setup-title">בואו נכין ערב מושלם 💜</h1>
-            <p className="flow-desc setup-sub">בחרו וייב, סוג תוכן ומשך — ואז 🎲 קובייה</p>
+            <p className="flow-kicker">הכנת הערב</p>
+            <h1 className="flow-title setup-title">בואו נכין ערב מושלם</h1>
+            <p className="flow-desc setup-sub">בחרו סוג ערב, תוכן ומשך — ואז ממשיכים לקובייה</p>
           </div>
         </header>
+
+        <nav className="setup-steps" aria-label="שלבי הכנה">
+          <div className="setup-step setup-step--on">
+            <span className="setup-step__num">1</span>
+            סוג הערב
+          </div>
+          <div className="setup-step setup-step--on">
+            <span className="setup-step__num">2</span>
+            תוכן
+          </div>
+          <div className="setup-step setup-step--on">
+            <span className="setup-step__num">3</span>
+            זמן
+          </div>
+          <div className="setup-step">
+            <span className="setup-step__num">4</span>
+            שחקנים
+          </div>
+        </nav>
 
         <div className="setup-body">
           {presets.length > 0 && onApplyPreset && (
@@ -203,42 +222,46 @@ export function QuickSetupScreen({
           )}
 
           <section className="setup-block">
-            <h2 className="setup-label">איזה וייב?</h2>
-            <div className="chip-scroll" role="list">
+            <h2 className="setup-label">סוג הערב</h2>
+            <div className="option-grid" role="list">
               {MODES.map((m) => (
                 <button
                   key={m}
                   type="button"
                   role="listitem"
-                  className={`choice-chip ${mode === m ? 'choice-chip--on' : ''} ${m === 'spicy' ? 'choice-chip--spicy' : ''}`}
+                  className={`option-card pressable ${mode === m ? 'option-card--on' : ''}`}
                   onClick={() => onModeSelect(m)}
                   aria-pressed={mode === m}
                   title={MODE_DESCRIPTIONS[m]}
                 >
-                  <span className="choice-chip__emoji">{MODE_EMOJI[m]}</span>
-                  {MODE_LABELS[m]}
+                  <span className="option-card__emoji">{MODE_EMOJI[m]}</span>
+                  <strong>{MODE_LABELS[m]}</strong>
+                  <small>{MODE_DESCRIPTIONS[m]}</small>
                 </button>
               ))}
             </div>
             {isMature && (
-              <p className="setup-mature-hint">🔞 תוכן 18+ לזוגות בוגרים · נדרש אישור גיל</p>
+              <p className="setup-mature-hint">תוכן 18+ לזוגות בוגרים · נדרש אישור גיל</p>
             )}
           </section>
 
           <section className="setup-block">
-            <h2 className="setup-label">מה משחקים?</h2>
-            <div className="choice-row">
+            <h2 className="setup-label">סוג התוכן</h2>
+            <div className="option-grid">
               {CONTENT_MODES.map((cm) => (
                 <button
                   key={cm}
                   type="button"
-                  className={`choice-pill ${contentMode === cm ? 'choice-pill--on' : ''}`}
+                  className={`option-card pressable ${contentMode === cm ? 'option-card--on' : ''}`}
                   onClick={() => onContentModeChange(cm)}
                   aria-pressed={contentMode === cm}
                   title={CONTENT_MODE_LABELS[cm]}
                 >
-                  <span>{CONTENT_EMOJI[cm]}</span>
-                  {isMature && cm === 'questions' ? 'שאלות 18+' : CONTENT_SHORT[cm]}
+                  <span className="option-card__emoji">{CONTENT_EMOJI[cm]}</span>
+                  <strong>
+                    {isMature && cm === 'questions' ? 'שאלות 18+' : CONTENT_SHORT[cm]}
+                  </strong>
+                  <small>{CONTENT_MODE_LABELS[cm]}</small>
                 </button>
               ))}
             </div>
@@ -246,19 +269,19 @@ export function QuickSetupScreen({
 
           {!isMature && (
             <section className="setup-block">
-              <h2 className="setup-label">כמה זמן?</h2>
-              <div className="preset-row">
+              <h2 className="setup-label">משך המשחק</h2>
+              <div className="option-grid">
                 {VIBE_PRESETS.map((preset) => (
                   <button
                     key={preset.id}
                     type="button"
-                    className={`preset-card ${vibe === preset.id ? 'preset-card--on' : ''}`}
+                    className={`option-card pressable ${vibe === preset.id ? 'option-card--on' : ''}`}
                     onClick={() => applyVibe(preset)}
                     aria-pressed={vibe === preset.id}
                   >
-                    <span className="preset-card__emoji">{preset.emoji}</span>
+                    <span className="option-card__emoji">{preset.emoji}</span>
                     <strong>{preset.label}</strong>
-                    <span className="preset-card__hint">{preset.hint}</span>
+                    <small>{preset.hint}</small>
                   </button>
                 ))}
               </div>
@@ -369,9 +392,12 @@ export function QuickSetupScreen({
 
         <div className="setup-footer">
           <button type="button" className="cta-button pressable" onClick={handleContinue}>
-            🎲 המשך לקובייה
+            המשך להכנת המשחק
           </button>
-          <p className="setup-hint">💡 תמיד אפשר לדלג · ספינבי 🤖 ישמח לשפוט · רק מה שנעים לשניכם</p>
+          <p className="setup-summary">
+            {MODE_LABELS[mode]} · {CONTENT_SHORT[contentMode]} ·{' '}
+            {isMature ? 'בלי הגבלת זמן' : VIBE_PRESETS.find((p) => p.id === vibe)?.hint}
+          </p>
         </div>
       </div>
     </section>

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { CustomContentPanel } from './CustomContentPanel';
 import { PrivacyPanel } from './PrivacyPanel';
+import { UserAccountPanel } from './UserAccountPanel';
 import { RadioGroup } from './RadioGroup';
 import { clearAllLocalData, loadHistory, loadRecords, loadUnlockedAchievements } from '../utils/storage';
+import { getFeatureFlags, setFeatureFlag } from '../utils/featureFlags';
 import { logoutSite } from '../utils/siteGate';
 import { ACHIEVEMENTS, AVATAR_OPTIONS, PLAYER_COLORS } from '../types/game';
 import type { AnimationStyle, AppSettings, BgTheme, FontChoice, SoundPack, SpinnerStyle } from '../types/game';
@@ -45,9 +47,41 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack, build
   const history = loadHistory();
   const achievements = loadUnlockedAchievements();
   const [cleared, setCleared] = useState(false);
+  const [flags, setFlags] = useState(getFeatureFlags);
+
+  const toggleFlag = (key: 'enablePartnerControl' | 'enableSurpriseMode') => {
+    const next = !flags[key];
+    setFeatureFlag(key, next);
+    setFlags({ ...flags, [key]: next });
+  };
 
   return (
     <div className="settings-panel">
+      <div className="settings-group">
+        <span className="settings-label">חיבור זוגי (ניסיוני)</span>
+        <label className="settings-toggle">
+          <span>שליטה משותפת לשותף/ה</span>
+          <input
+            type="checkbox"
+            checked={flags.enablePartnerControl}
+            onChange={() => toggleFlag('enablePartnerControl')}
+          />
+          <span className="settings-toggle__slider" />
+        </label>
+        <p className="custom-content-panel__hint">
+          כבוי (מומלץ): השותף/ה צופה בזמן אמת בלבד. דלוק: ממשק שליטה מקומי לשותף/ה — סנכרון המשחק נשאר אצל המארח/ת מטעמי אבטחה.
+        </p>
+        <label className="settings-toggle">
+          <span>ערב הפתעה</span>
+          <input
+            type="checkbox"
+            checked={flags.enableSurpriseMode}
+            onChange={() => toggleFlag('enableSurpriseMode')}
+          />
+          <span className="settings-toggle__slider" />
+        </label>
+      </div>
+
       <div className="settings-group">
         <label className="settings-toggle">
           <span>הפעלת סאונד</span>
@@ -198,6 +232,7 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack, build
         </div>
       </div>
 
+      <UserAccountPanel />
       <CustomContentPanel matureAgeConfirmed={settings.matureAgeConfirmed} />
       <PrivacyPanel />
 

@@ -1,0 +1,83 @@
+:root {
+  --cs-font-sans: 'Heebo', 'Assistant', system-ui, sans-serif;
+  --cs-font-display: 'Rubik', 'Heebo', sans-serif;
+
+  --cs-bg-0: #090616;
+  --cs-bg-1: #120a26;
+  --cs-bg-2: #1a0f33;
+  --cs-surface: rgba(24, 13, 45, 0.82);
+  --cs-surface-2: rgba(39, 19, 67, 0.72);
+  --cs-surface-elevated: rgba(39, 19, 67, 0.92);
+
+  --cs-border: rgba(255, 255, 255, 0.1);
+  --cs-border-strong: rgba(255, 255, 255, 0.16);
+  --cs-border-active: rgba(255, 200, 61, 0.55);
+
+  --cs-text: #fff8fc;
+  --cs-text-muted: #cfc3dd;
+  --cs-text-soft: #887a9c;
+
+  --cs-pink: #ff4fa8;
+  --cs-pink-light: #ff83c5;
+  --cs-purple: #9858ff;
+  --cs-violet: #7138d8;
+  --cs-accent: #ff4fa8;
+  --cs-accent-2: #9858ff;
+  --cs-accent-3: #c552e8;
+  --cs-gold: #ffc83d;
+  --cs-success: #34d399;
+  --cs-danger: #fb7185;
+
+  --cs-gradient-brand: linear-gradient(100deg, #ff4fa8 0%, #c552e8 52%, #8758ff 100%);
+  --cs-gradient-surface: linear-gradient(145deg, rgba(36, 18, 61, 0.94), rgba(16, 9, 31, 0.96));
+  --cs-gradient-soft: linear-gradient(160deg, rgba(255, 79, 168, 0.16), rgba(152, 88, 255, 0.12));
+
+  --cs-shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.45);
+  --cs-shadow-glow: 0 0 60px rgba(255, 79, 168, 0.22);
+  --cs-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  --cs-radius-sm: 14px;
+  --cs-radius-md: 20px;
+  --cs-radius-lg: 28px;
+  --cs-radius-pill: 999px;
+
+  --cs-space-1: 4px;
+  --cs-space-2: 8px;
+  --cs-space-3: 12px;
+  --cs-space-4: 16px;
+  --cs-space-5: 24px;
+  --cs-space-6: 32px;
+  --cs-space-7: 40px;
+  --cs-space-8: 48px;
+
+  --cs-text-xs: 0.875rem;
+  --cs-text-sm: 0.9375rem;
+  --cs-text-md: 1.0625rem;
+  --cs-text-lg: 1.375rem;
+  --cs-text-xl: clamp(1.75rem, 4vw, 2rem);
+  --cs-text-hero: clamp(2.125rem, 6vw, 3rem);
+
+  --layout-card-max: 880px;
+  --layout-game-max: 1050px;
+  --tap-min: 44px;
+}
+
+[data-theme='light'] {
+  --cs-bg-0: #f6f1ff;
+  --cs-bg-1: #ede6ff;
+  --cs-bg-2: #e4daf8;
+  --cs-surface: rgba(255, 255, 255, 0.78);
+  --cs-surface-2: rgba(255, 255, 255, 0.9);
+  --cs-surface-elevated: rgba(255, 255, 255, 0.96);
+  --cs-text: #1b0d3d;
+  --cs-text-muted: #5b4b8a;
+  --cs-text-soft: #7a6aa8;
+  --cs-border: rgba(27, 13, 61, 0.1);
+  --cs-border-strong: rgba(27, 13, 61, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cs-motion: 0;
+  }
+}

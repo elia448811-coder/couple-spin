@@ -154,7 +154,7 @@ export async function shareGameResult(
   }
 
   const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-  window.open(waUrl, '_blank');
+  window.open(waUrl, '_blank', 'noopener,noreferrer');
 }
 
 export function buildEndShareData(

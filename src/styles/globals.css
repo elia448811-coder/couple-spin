@@ -69,10 +69,11 @@ button:focus-visible {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+  color: var(--cs-text, #f8f4ff);
   background:
     radial-gradient(circle at top right, rgba(255, 79, 163, 0.22), transparent 34%),
     radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.18), transparent 34%),
-    linear-gradient(135deg, #10071f 0%, #1b0d3d 48%, #090414 100%);
+    linear-gradient(135deg, var(--cs-bg-1, #10071f) 0%, var(--cs-bg-2, #1b0d3d) 48%, var(--cs-bg-0, #090414) 100%);
 }
 
 [data-theme='light'] .app-shell {

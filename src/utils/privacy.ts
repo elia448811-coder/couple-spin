@@ -54,6 +54,10 @@ function boundaryList(value: unknown): ContentBoundary[] {
     : [];
 }
 
+function notifyPrivacyChanged(): void {
+  void import('./cloudSync').then(({ scheduleCloudPush }) => scheduleCloudPush());
+}
+
 export function isGuestMode(): boolean {
   return getStorage()?.getItem(GUEST_KEY) === 'true';
 }
@@ -61,8 +65,13 @@ export function isGuestMode(): boolean {
 export function setGuestMode(on: boolean): void {
   try {
     const storage = getStorage();
-    if (on) storage?.setItem(GUEST_KEY, 'true');
-    else storage?.removeItem(GUEST_KEY);
+    if (on) {
+      storage?.setItem(GUEST_KEY, 'true');
+      void import('./cloudSync').then(({ signOutCloudUser }) => signOutCloudUser());
+    } else {
+      storage?.removeItem(GUEST_KEY);
+      notifyPrivacyChanged();
+    }
   } catch {}
 }
 
@@ -77,6 +86,7 @@ export function saveBoundaries(boundaries: Boundaries): void {
     playerOne: boundaryList(boundaries.playerOne),
     playerTwo: boundaryList(boundaries.playerTwo),
   });
+  notifyPrivacyChanged();
 }
 
 export function sharedBoundaries(boundaries: Boundaries = loadBoundaries()): ContentBoundary[] {
@@ -114,6 +124,7 @@ export function taskAllowedByBoundaries(
 export function hideTaskForever(id: string): void {
   if (!id) return;
   writeJson(HIDDEN_TASKS_KEY, [...readIds(HIDDEN_TASKS_KEY), id]);
+  notifyPrivacyChanged();
 }
 
 export function isTaskHidden(id: string): boolean {
@@ -125,6 +136,7 @@ export function toggleFavorite(id: string): boolean {
   const favorites = readIds(FAVORITES_KEY);
   const next = favorites.includes(id) ? favorites.filter((item) => item !== id) : [...favorites, id];
   writeJson(FAVORITES_KEY, next);
+  notifyPrivacyChanged();
   return next.includes(id);
 }
 
@@ -153,6 +165,7 @@ export function importAllData(data: unknown): { ok: boolean; error?: string } {
       JSON.stringify(value);
       storage.setItem(key, JSON.stringify(value));
     }
+    notifyPrivacyChanged();
     return { ok: true };
   } catch {
     return { ok: false, error: 'import_failed' };
@@ -176,5 +189,6 @@ export function setDiscreteMode(on: boolean): void {
     const storage = getStorage();
     if (on) storage?.setItem(DISCRETE_KEY, 'true');
     else storage?.removeItem(DISCRETE_KEY);
+    notifyPrivacyChanged();
   } catch {}
 }

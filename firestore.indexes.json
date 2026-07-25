@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "version", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -20,6 +20,9 @@ type TaskModalProps = {
   onMarkFunniest: () => void;
   onHideForever?: () => void;
   onToggleFavorite?: () => void;
+  readOnly?: boolean;
+  taskFeedback?: 'up' | 'down' | null;
+  onTaskFeedback?: (rating: 'up' | 'down') => void;
 };
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
@@ -42,6 +45,9 @@ export function TaskModal({
   onMarkFunniest,
   onHideForever,
   onToggleFavorite,
+  readOnly = false,
+  taskFeedback = null,
+  onTaskFeedback,
 }: TaskModalProps) {
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [confirmSkip, setConfirmSkip] = useState(false);
@@ -135,7 +141,7 @@ export function TaskModal({
           <p className="task-duration">⏱ {task.durationSeconds} שניות</p>
         )}
 
-        {confirmSkip ? (
+        {!readOnly && confirmSkip ? (
           <div className="task-modal__skip-confirm" id="task-skip-confirm" role="alertdialog" aria-labelledby="task-skip-confirm">
             <p>לדלג על המשימה?</p>
             <div className="task-modal__main-actions">
@@ -147,7 +153,7 @@ export function TaskModal({
               </button>
             </div>
           </div>
-        ) : (
+        ) : !readOnly ? (
           <div className="task-modal__main-actions">
             <button type="button" className="cta-button cta-button--modal pressable" onClick={onComplete}>
               {isQuestion ? '✓ דיברנו על זה' : '✓ בוצע'}
@@ -156,8 +162,34 @@ export function TaskModal({
               דלג
             </button>
           </div>
+        ) : (
+          <p className="task-modal__spectator-note" role="status">
+            צפייה בלבד — השותף/ה משחק/ת על המכשיר הראשי
+          </p>
         )}
 
+        {!readOnly && onTaskFeedback && (
+          <div className="task-feedback-row" aria-label="משוב על המשימה">
+            <button
+              type="button"
+              className={`task-feedback-btn pressable ${taskFeedback === 'up' ? 'task-feedback-btn--on' : ''}`}
+              aria-pressed={taskFeedback === 'up'}
+              onClick={() => onTaskFeedback('up')}
+            >
+              👍 אהבתי
+            </button>
+            <button
+              type="button"
+              className={`task-feedback-btn pressable ${taskFeedback === 'down' ? 'task-feedback-btn--on' : ''}`}
+              aria-pressed={taskFeedback === 'down'}
+              onClick={() => onTaskFeedback('down')}
+            >
+              👎 פחות
+            </button>
+          </div>
+        )}
+
+        {!readOnly && (
         <button
           type="button"
           className="task-modal__more-toggle"
@@ -166,8 +198,9 @@ export function TaskModal({
         >
           {extrasOpen ? '▲ פחות אפשרויות' : '▼ עוד אפשרויות'}
         </button>
+        )}
 
-        {extrasOpen && (
+        {!readOnly && extrasOpen && (
           <div className="task-modal__extras">
             <button type="button" className="extra-btn pressable" onClick={onReplaceTask}>
               {isQuestion ? 'שאלה אחרת' : 'משימה אחרת'}

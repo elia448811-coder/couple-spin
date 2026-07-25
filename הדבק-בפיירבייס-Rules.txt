@@ -1,0 +1,316 @@
+============================================================
+הוראות קצרות:
+1. פתח את הקובץ הזה
+2. סמן הכול מתחת לקו (Ctrl+A אחרי הלחיצה על השורה הראשונה של rules_version)
+3. העתק (Ctrl+C)
+4. לך ל-Firebase → Firestore Database → Rules
+5. מחק הכול שם
+6. הדבק (Ctrl+V)
+7. לחץ Publish
+============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function roomDoc(roomId) {
+      return get(/databases/$(database)/documents/rooms/$(roomId));
+    }
+
+    function isRoomMember(roomId) {
+      return isAuth()
+        && roomDoc(roomId).exists
+        && (
+          roomDoc(roomId).data.hostUid == request.auth.uid
+          || roomDoc(roomId).data.partnerUid == request.auth.uid
+        );
+    }
+
+    function isRoomHost(roomId) {
+      return isAuth()
+        && roomDoc(roomId).exists
+        && roomDoc(roomId).data.hostUid == request.auth.uid;
+    }
+
+    function roomResourceActive() {
+      return resource.data.expiresAtMs > request.time.toMillis();
+    }
+
+    function roomActive(roomId) {
+      return roomDoc(roomId).exists
+        && roomDoc(roomId).data.expiresAtMs > request.time.toMillis();
+    }
+
+    function unchanged(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == resource.data[field];
+    }
+
+    function validDisplayCode(code) {
+      return code.matches('^[0-9]{8}$');
+    }
+
+    function lockedRoomIdentity() {
+      return unchanged('hostUid')
+        && unchanged('displayCode')
+        && unchanged('createdAtMs')
+        && unchanged('expiresAtMs');
+    }
+
+    function validRoomStatus(value) {
+      return value in ['waiting', 'lobby', 'playing', 'ended'];
+    }
+
+    function hostPresenceUpdate() {
+      return resource.data.hostUid == request.auth.uid
+        && unchanged('partnerUid')
+        && unchanged('hostName')
+        && unchanged('partnerName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('status')
+        && unchanged('lastEventId')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['hostReady', 'hostLastSeenMs', 'updatedAtMs', 'updatedBy', 'updatedAt']);
+    }
+
+    function partnerPresenceUpdate() {
+      return resource.data.partnerUid == request.auth.uid
+        && unchanged('partnerUid')
+        && unchanged('hostName')
+        && unchanged('partnerName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('status')
+        && unchanged('lastEventId')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['partnerReady', 'partnerLastSeenMs', 'updatedAtMs', 'updatedBy', 'updatedAt']);
+    }
+
+    function hostVersionBump() {
+      return resource.data.hostUid == request.auth.uid
+        && request.resource.data.version == resource.data.version + 1
+        && unchanged('partnerUid')
+        && unchanged('hostName')
+        && unchanged('partnerName')
+        && unchanged('eveningTitle')
+        && unchanged('hostReady')
+        && unchanged('partnerReady')
+        && unchanged('hostLastSeenMs')
+        && unchanged('partnerLastSeenMs')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['version', 'lastEventId', 'updatedBy', 'updatedAtMs', 'updatedAt', 'status'])
+        && validRoomStatus(request.resource.data.status);
+    }
+
+    function partnerVersionBump() {
+      return resource.data.partnerUid == request.auth.uid
+        && request.resource.data.version == resource.data.version + 1
+        && unchanged('partnerUid')
+        && unchanged('hostName')
+        && unchanged('partnerName')
+        && unchanged('eveningTitle')
+        && unchanged('hostReady')
+        && unchanged('partnerReady')
+        && unchanged('hostLastSeenMs')
+        && unchanged('partnerLastSeenMs')
+        && unchanged('status')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['version', 'lastEventId', 'updatedBy', 'updatedAtMs', 'updatedAt']);
+    }
+
+    function partnerJoinUpdate() {
+      return resource.data.partnerUid == null
+        && resource.data.status == 'waiting'
+        && request.auth.uid != resource.data.hostUid
+        && request.resource.data.partnerUid == request.auth.uid
+        && request.resource.data.partnerName is string
+        && request.resource.data.partnerName.size() > 0
+        && request.resource.data.partnerName.size() <= 32
+        && request.resource.data.partnerReady == false
+        && request.resource.data.status == 'lobby'
+        && unchanged('hostName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('lastEventId')
+        && unchanged('hostReady')
+        && unchanged('hostLastSeenMs')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'partnerUid',
+            'partnerName',
+            'partnerReady',
+            'partnerLastSeenMs',
+            'status',
+            'updatedAtMs',
+            'updatedBy',
+            'updatedAt'
+          ]);
+    }
+
+    function partnerLeaveUpdate() {
+      return resource.data.partnerUid == request.auth.uid
+        && request.resource.data.partnerUid == null
+        && request.resource.data.partnerName == null
+        && request.resource.data.partnerReady == false
+        && request.resource.data.partnerLastSeenMs == 0
+        && request.resource.data.status == 'waiting'
+        && unchanged('hostName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('lastEventId')
+        && unchanged('hostReady')
+        && unchanged('hostLastSeenMs')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'partnerUid',
+            'partnerName',
+            'partnerReady',
+            'partnerLastSeenMs',
+            'status',
+            'updatedAtMs',
+            'updatedBy',
+            'updatedAt'
+          ]);
+    }
+
+    function validEventType() {
+      return request.resource.data.type in [
+        'PLAYER_READY',
+        'GAME_STARTED',
+        'GAME_SNAPSHOT',
+        'GAME_ENDED',
+        'TURN_CHANGED'
+      ];
+    }
+
+    function partnerMayCreateEvent() {
+      return request.resource.data.type == 'PLAYER_READY';
+    }
+
+    function gameStartAllowed(roomId) {
+      return request.resource.data.type != 'GAME_STARTED'
+        || (
+          roomDoc(roomId).data.hostReady == true
+          && roomDoc(roomId).data.partnerReady == true
+          && roomDoc(roomId).data.partnerUid != null
+        );
+    }
+
+    function rateLimitCreateOk() {
+      return request.resource.data.keys().hasOnly(['failedJoins', 'lockedUntilMs', 'updatedAtMs', 'updatedAt'])
+        && request.resource.data.failedJoins == 1
+        && request.resource.data.lockedUntilMs == 0;
+    }
+
+    function rateLimitUpdateOk() {
+      return request.resource.data.failedJoins is int
+        && request.resource.data.lockedUntilMs is int
+        && (
+          (
+            request.resource.data.failedJoins == resource.data.get('failedJoins', 0) + 1
+            && request.resource.data.lockedUntilMs == resource.data.get('lockedUntilMs', 0)
+            && request.resource.data.failedJoins <= 20
+          )
+          || (
+            request.resource.data.failedJoins == 0
+            && request.resource.data.lockedUntilMs > resource.data.get('lockedUntilMs', 0)
+            && request.resource.data.lockedUntilMs >= request.time.toMillis()
+            && resource.data.get('failedJoins', 0) >= 9
+          )
+          || (
+            resource.data.get('lockedUntilMs', 0) > 0
+            && resource.data.get('lockedUntilMs', 0) <= request.time.toMillis()
+            && request.resource.data.failedJoins == 0
+            && request.resource.data.lockedUntilMs == 0
+          )
+        );
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if isAuth() && request.auth.uid == userId;
+    }
+
+    match /rateLimits/{uid} {
+      allow read: if isAuth() && request.auth.uid == uid;
+      allow create: if isAuth() && request.auth.uid == uid && rateLimitCreateOk();
+      allow update: if isAuth() && request.auth.uid == uid && rateLimitUpdateOk();
+      allow delete: if false;
+    }
+
+    match /roomCodes/{code} {
+      allow read: if isAuth()
+        && validDisplayCode(code)
+        && resource.data.expiresAtMs > request.time.toMillis();
+      allow create: if isAuth()
+        && validDisplayCode(code)
+        && request.resource.data.roomId is string
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.expiresAtMs > request.time.toMillis()
+        && request.resource.data.expiresAtMs
+          <= request.time.toMillis() + 3 * 60 * 60 * 1000;
+      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isAuth()
+        && roomResourceActive()
+        && (
+          resource.data.hostUid == request.auth.uid
+          || resource.data.partnerUid == request.auth.uid
+        );
+
+      allow create: if isAuth()
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.partnerUid == null
+        && request.resource.data.version == 0
+        && request.resource.data.expiresAtMs > request.time.toMillis()
+        && request.resource.data.expiresAtMs
+          <= request.time.toMillis() + 3 * 60 * 60 * 1000
+        && request.resource.data.displayCode is string
+        && validDisplayCode(request.resource.data.displayCode)
+        && request.resource.data.hostName is string
+        && request.resource.data.hostName.size() > 0
+        && request.resource.data.hostName.size() <= 32
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.hostReady == false
+        && request.resource.data.partnerReady == false;
+
+      allow update: if isAuth() && roomResourceActive() && lockedRoomIdentity() && (
+        hostPresenceUpdate()
+        || partnerPresenceUpdate()
+        || hostVersionBump()
+        || partnerVersionBump()
+        || partnerJoinUpdate()
+        || partnerLeaveUpdate()
+      );
+
+      allow delete: if isAuth()
+        && resource.data.hostUid == request.auth.uid;
+
+      match /events/{eventId} {
+        allow read: if isAuth() && isRoomMember(roomId) && roomActive(roomId);
+        allow create: if isAuth()
+          && isRoomMember(roomId)
+          && roomActive(roomId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.version == roomDoc(roomId).data.version + 1
+          && request.resource.data.createdAtMs is int
+          && validEventType()
+          && gameStartAllowed(roomId)
+          && request.resource.data.keys().hasOnly([
+            'type', 'version', 'createdBy', 'createdAtMs', 'payload', 'createdAt'
+          ])
+          && request.resource.data.payload.keys().size() <= 40
+          && (
+            isRoomHost(roomId)
+            || partnerMayCreateEvent()
+          );
+        allow update, delete: if false;
+      }
+    }
+  }
+}

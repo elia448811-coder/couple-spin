@@ -6,6 +6,7 @@ export function saveSnapshot(game: GameState): void {
   if (game.screen !== 'game' || game.finishEventId) return;
   try {
     sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(game));
+    void import('./cloudSync').then(({ pushCloudSnapshot }) => pushCloudSnapshot(game));
   } catch {}
 }
 

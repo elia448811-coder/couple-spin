@@ -22,9 +22,15 @@
     "generate:questions": "node scripts/generate-from-experience.mjs",
     "generate:icons": "node scripts/generate-pwa-icons.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
-    "prebuild": "node scripts/generate-pwa-icons.mjs"
+    "check:firebase": "node scripts/check-firebase.mjs",
+    "check:firestore-rooms": "node scripts/check-firestore-rooms.mjs",
+    "check:user-profile": "node scripts/check-user-profile.mjs",
+    "deploy:firestore": "node scripts/deploy-firestore.mjs",
+    "prebuild": "node scripts/generate-pwa-icons.mjs",
+    "check:email-auth": "node scripts/check-email-auth.mjs"
   },
   "dependencies": {
+    "firebase": "^12.16.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
