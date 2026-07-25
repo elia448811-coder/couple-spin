@@ -1,37 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { builtInContent, getContentBankStats } from '../data/allContent';
-import {
-  addAdminUsername,
-  ensureAdminBootstrap,
-  isCurrentUserAdmin,
-  listAdmins,
-  removeAdminUsername,
-  type AdminRecord,
-} from '../utils/admin';
+import { isCurrentUserAdmin, SOLE_ADMIN_EMAIL } from '../utils/admin';
 import {
   builtInToEditable,
   deleteContentOverride,
   fetchContentOverrides,
-  getCachedContentOverrides,
   upsertContentItem,
   type ContentItemDoc,
 } from '../utils/contentOverrides';
 import { fetchSiteConfig, saveSiteConfig, type SiteConfig } from '../utils/siteConfig';
-import { emailToUsername, getAuthUser } from '../utils/userAuth';
+import { getAuthUser } from '../utils/userAuth';
 import type { ContentKind, TaskCategory, TaskLevel } from '../types/game';
 
 type AdminScreenProps = {
   onBack: () => void;
 };
 
-type Tab = 'site' | 'content' | 'admins';
+type Tab = 'site' | 'content';
 
 export function AdminScreen({ onBack }: AdminScreenProps) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>('site');
   const [config, setConfig] = useState<SiteConfig | null>(null);
-  const [admins, setAdmins] = useState<AdminRecord[]>([]);
-  const [newAdmin, setNewAdmin] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,20 +29,15 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
   const [kindFilter, setKindFilter] = useState<'all' | ContentKind>('all');
   const [overrides, setOverrides] = useState<ContentItemDoc[]>([]);
   const [editing, setEditing] = useState<ContentItemDoc | null>(null);
-  const [actor, setActor] = useState('admin');
+  const [actor, setActor] = useState(SOLE_ADMIN_EMAIL);
 
   const reload = useCallback(async () => {
-    const ok = await isCurrentUserAdmin();
-    if (!ok) {
-      await ensureAdminBootstrap();
-    }
     const isAdmin = await isCurrentUserAdmin();
     setAllowed(isAdmin);
     if (!isAdmin) return;
     const user = await getAuthUser();
-    setActor(emailToUsername(user?.email) || user?.uid || 'admin');
+    setActor(user?.email || SOLE_ADMIN_EMAIL);
     setConfig(await fetchSiteConfig());
-    setAdmins(await listAdmins());
     setOverrides(await fetchContentOverrides());
   }, []);
 
@@ -71,15 +56,12 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
       const o = overrideMap.get(item.id);
       return {
         base: item,
-        effective: o
-          ? { ...builtInToEditable(item), ...o }
-          : builtInToEditable(item),
+        effective: o ? { ...builtInToEditable(item), ...o } : builtInToEditable(item),
         overridden: Boolean(o),
         hidden: Boolean(o?.hidden),
       };
     });
-    const customCloud = overrides.filter((o) => o.source === 'custom');
-    for (const o of customCloud) {
+    for (const o of overrides.filter((x) => x.source === 'custom')) {
       if (rows.some((r) => r.base.id === o.id)) continue;
       rows.push({
         base: {
@@ -121,7 +103,6 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
           registrationEnabled: config.registrationEnabled,
           welcomeTitle: config.welcomeTitle,
           welcomeSubtitle: config.welcomeSubtitle,
-          adminUsernames: config.adminUsernames,
         },
         actor,
       );
@@ -151,7 +132,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
         hidden: editing.hidden,
         source: editing.source,
       });
-      setOverrides(getCachedContentOverrides().length ? await fetchContentOverrides() : await fetchContentOverrides());
+      setOverrides(await fetchContentOverrides());
       setEditing(null);
       setMessage('הפריט נשמר.');
     } catch (e) {
@@ -176,9 +157,8 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
   };
 
   const addNewItem = () => {
-    const id = `admin-${Date.now().toString(36)}`;
     setEditing({
-      id,
+      id: `admin-${Date.now().toString(36)}`,
       title: 'פריט חדש',
       description: '',
       kind: 'question',
@@ -205,7 +185,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
       <section className="page-screen flow-screen" dir="rtl">
         <div className="flow-card">
           <h1 className="flow-title">אין הרשאת ניהול</h1>
-          <p className="hub-card__text">החשבון הנוכחי אינו מנהל מערכת.</p>
+          <p className="hub-card__text">רק מנהל המערכת יכול להיכנס לכאן.</p>
           <button type="button" className="primary-action pressable" onClick={onBack}>
             חזרה
           </button>
@@ -227,27 +207,28 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
           </div>
         </header>
 
+        <p className="history-hint" dir="ltr">
+          Admin: {SOLE_ADMIN_EMAIL}
+        </p>
         <p className="history-hint">
           מאגר פעיל: {stats.total} פריטים ({stats.questions} שאלות · {stats.tasks} משימות)
         </p>
 
         <div className="hub-actions-row" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-          {(
-            [
-              ['site', 'עמוד כניסה'],
-              ['content', 'מאגר תוכן'],
-              ['admins', 'מנהלים'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`hub-btn pressable ${tab === id ? 'hub-btn--primary' : 'hub-btn--ghost'}`}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
+          <button
+            type="button"
+            className={`hub-btn pressable ${tab === 'site' ? 'hub-btn--primary' : 'hub-btn--ghost'}`}
+            onClick={() => setTab('site')}
+          >
+            עמוד כניסה
+          </button>
+          <button
+            type="button"
+            className={`hub-btn pressable ${tab === 'content' ? 'hub-btn--primary' : 'hub-btn--ghost'}`}
+            onClick={() => setTab('content')}
+          >
+            מאגר תוכן
+          </button>
         </div>
 
         {error && (
@@ -290,68 +271,14 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
               />
               <span>לאפשר הרשמה של משתמשים חדשים</span>
             </label>
+            <p className="custom-content-panel__hint">
+              לא ניתן להוסיף מנהלים נוספים — האדמין קבוע במערכת.
+            </p>
             <div className="settings-actions">
               <button type="button" className="primary-action pressable" disabled={busy} onClick={() => void saveSite()}>
                 שמור הגדרות כניסה
               </button>
             </div>
-          </div>
-        )}
-
-        {tab === 'admins' && config && (
-          <div className="settings-group">
-            <h2 className="settings-label">מנהלי מערכת</h2>
-            <p className="custom-content-panel__hint">
-              מנהל יכול לערוך שאלות, לשלוט בהרשמה, ולנהל מנהלים נוספים.
-            </p>
-            <ul className="admin-list">
-              {config.adminUsernames.map((u) => (
-                <li key={u} className="admin-list__item">
-                  <span dir="ltr">{u}</span>
-                  <button
-                    type="button"
-                    className="secondary-action pressable"
-                    disabled={busy || config.adminUsernames.length <= 1}
-                    onClick={() =>
-                      void removeAdminUsername(u, actor).then((r) => {
-                        if (!r.ok) setError(r.error ?? 'הסרה נכשלה');
-                        else void reload();
-                      })
-                    }
-                  >
-                    הסר
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <p className="history-hint">מסמכי אדמין פעילים: {admins.length}</p>
-            <label className="settings-field">
-              <span>הוספת מנהל (שם משתמש קיים)</span>
-              <input
-                type="text"
-                value={newAdmin}
-                onChange={(e) => setNewAdmin(e.target.value)}
-                placeholder="username"
-                dir="ltr"
-              />
-            </label>
-            <button
-              type="button"
-              className="primary-action pressable"
-              disabled={busy || newAdmin.trim().length < 3}
-              onClick={() =>
-                void addAdminUsername(newAdmin, actor).then((r) => {
-                  if (!r.ok) setError(r.error ?? 'הוספה נכשלה');
-                  else {
-                    setNewAdmin('');
-                    void reload();
-                    setMessage('המנהל נוסף — ייכנס לתוקף בהתחברות הבאה שלו.');
-                  }
-                })
-              }
-            >
-              הוסף מנהל
-            </button>
           </div>
         )}
 

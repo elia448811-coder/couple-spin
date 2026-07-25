@@ -1,16 +1,19 @@
-חובה פעם אחת אחרי העדכון:
+חובה — Rules לאדמין היחיד:
 
 1. פתחו F:\GAMED\PASTE-FIREBASE-RULES.txt
 2. סמנו הכול → העתיקו
-3. Firebase Console → Firestore → Rules
-   https://console.firebase.google.com/project/double-game-dd845/firestore/rules
-4. הדביקו → Publish
-5. חובה לראות: DOUBLE_GAME_RULES_v26_ADMIN
+3. Firebase → Firestore → Rules → Publish
+4. חובה לראות: DOUBLE_GAME_RULES_v27_SOLE_ADMIN
 
-אחר כך במחשב (אופציונלי):
-  npm run seed:admin
+האדמין היחיד לנצח:
+  elia448811@gmail.com
 
-כניסה לאדמין באתר:
-  שם משתמש: test_host
-  סיסמה: CoupleTest1!
-  הגדרות → פתיחת לוח ניהול
+אי אפשר להגדיר מנהל אחר בממשק או בנתונים.
+
+יצירת חשבון האדמין (פעם אחת), עם הסיסמה שלכם:
+  npm run ensure:sole-admin -- YourPasswordHere
+
+כניסה באתר:
+  שם משתמש / אימייל: elia448811@gmail.com
+  + הסיסמה שבחרתם
+  → הגדרות → פתיחת לוח ניהול

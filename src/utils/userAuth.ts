@@ -1,4 +1,5 @@
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
+import { isSoleAdminEmail, SOLE_ADMIN_EMAIL } from './admin';
 import { ensureUserProfile } from './userProfile';
 
 /** Synthetic domain — Firebase Email/Password under the hood; users never see it. */
@@ -125,20 +126,36 @@ export function subscribeAuth(listener: (user: AuthUserView | null) => void): ()
   return () => unsub();
 }
 
-/** Register with username + password (links anonymous session when possible). */
+function resolveAuthEmail(identifier: string): { ok: true; email: string; label: string } | { ok: false; error: string } {
+  const raw = identifier.trim();
+  if (raw.includes('@')) {
+    const email = raw.toLowerCase();
+    if (!isValidEmail(email)) return { ok: false, error: 'כתובת אימייל לא תקינה.' };
+    // Only the sole admin may use a real email; everyone else uses username.
+    if (!isSoleAdminEmail(email)) {
+      return { ok: false, error: 'התחברות באימייל שמורה למנהל המערכת. השתמשו בשם משתמש.' };
+    }
+    return { ok: true, email: SOLE_ADMIN_EMAIL, label: SOLE_ADMIN_EMAIL };
+  }
+  const userName = normalizeUsername(raw);
+  if (!isValidUsername(userName)) {
+    return { ok: false, error: 'שם משתמש: 3–24 תווים, אותיות/מספרים/_ בלבד.' };
+  }
+  return { ok: true, email: usernameToEmail(userName), label: userName };
+}
+
+/** Register with username (+ sole admin may use their email). */
 export async function registerWithUsername(
   username: string,
   password: string,
   displayName?: string,
 ): Promise<AuthResult> {
   if (!isFirebaseConfigured()) return { ok: false, error: 'Firebase לא מוגדר.' };
-  const userName = normalizeUsername(username);
-  if (!isValidUsername(userName)) {
-    return { ok: false, error: 'שם משתמש: 3–24 תווים, אותיות/מספרים/_ בלבד.' };
-  }
   if (password.length < 6) return { ok: false, error: 'הסיסמה חייבת לפחות 6 תווים.' };
 
-  const email = usernameToEmail(userName);
+  const resolved = resolveAuthEmail(username);
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  const { email, label } = resolved;
 
   try {
     const auth = await getFirebaseAuth();
@@ -166,11 +183,11 @@ export async function registerWithUsername(
       user = created.user;
     }
 
-    const name = (displayName?.trim() || userName).slice(0, 32);
+    const name = (displayName?.trim() || label).slice(0, 32);
     await updateProfile(user, { displayName: name });
     await ensureUserProfile({ displayName: name });
 
-    return { ok: true, uid: user.uid, username: userName, email: user.email };
+    return { ok: true, uid: user.uid, username: label, email: user.email };
   } catch (error) {
     return { ok: false, error: mapAuthError(error) };
   }
@@ -178,22 +195,21 @@ export async function registerWithUsername(
 
 export async function signInWithUsername(username: string, password: string): Promise<AuthResult> {
   if (!isFirebaseConfigured()) return { ok: false, error: 'Firebase לא מוגדר.' };
-  const userName = normalizeUsername(username);
-  if (!isValidUsername(userName)) {
-    return { ok: false, error: 'שם משתמש: 3–24 תווים, אותיות/מספרים/_ בלבד.' };
-  }
   if (!password) return { ok: false, error: 'יש להזין סיסמה.' };
+
+  const resolved = resolveAuthEmail(username);
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  const { email, label } = resolved;
 
   try {
     const auth = await getFirebaseAuth();
     if (!auth) return { ok: false, error: 'Firebase לא זמין.' };
     const { signInWithEmailAndPassword } = await import('firebase/auth');
-    const email = usernameToEmail(userName);
     const cred = await signInWithEmailAndPassword(auth, email, password);
     await ensureUserProfile({
-      displayName: cred.user.displayName || userName,
+      displayName: cred.user.displayName || label,
     });
-    return { ok: true, uid: cred.user.uid, username: userName, email: cred.user.email };
+    return { ok: true, uid: cred.user.uid, username: label, email: cred.user.email };
   } catch (error) {
     return { ok: false, error: mapAuthError(error) };
   }

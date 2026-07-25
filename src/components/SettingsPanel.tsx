@@ -5,7 +5,7 @@ import { UserAccountPanel } from './UserAccountPanel';
 import { RadioGroup } from './RadioGroup';
 import { clearAllLocalData, loadHistory, loadRecords, loadUnlockedAchievements } from '../utils/storage';
 import { getFeatureFlags, setFeatureFlag } from '../utils/featureFlags';
-import { ensureAdminBootstrap, isCurrentUserAdmin } from '../utils/admin';
+import { isCurrentUserAdmin } from '../utils/admin';
 import { signOutUser } from '../utils/userAuth';
 import { ACHIEVEMENTS, AVATAR_OPTIONS, PLAYER_COLORS } from '../types/game';
 import type { AnimationStyle, AppSettings, BgTheme, FontChoice, SoundPack, SpinnerStyle } from '../types/game';
@@ -60,10 +60,7 @@ export function SettingsPanel({
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    void (async () => {
-      await ensureAdminBootstrap();
-      setIsAdmin(await isCurrentUserAdmin());
-    })();
+    void isCurrentUserAdmin().then(setIsAdmin);
   }, []);
 
   const toggleFlag = (key: 'enablePartnerControl' | 'enableSurpriseMode') => {

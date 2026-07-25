@@ -1,14 +1,16 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v26_ADMIN - username login + admin console
+// DOUBLE_GAME_RULES_v27_SOLE_ADMIN - only elia448811@gmail.com is admin
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
       return request.auth != null;
     }
 
+    // Hard-locked sole admin — cannot be granted to anyone else via data/UI.
     function isAdmin() {
       return isAuth()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'elia448811@gmail.com';
     }
 
     function roomDoc(roomId) {
@@ -244,25 +246,9 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Admin roster — test_host may bootstrap once; other writes require admin
+    // Legacy admins collection — locked; sole admin is email-based only
     match /admins/{uid} {
-      allow read: if isAuth();
-      allow create: if isAuth()
-        && request.auth.uid == uid
-        && request.resource.data.username is string
-        && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 24
-        && (
-          isAdmin()
-          || request.resource.data.username == 'test_host'
-          || (
-            exists(/databases/$(database)/documents/config/app)
-            && get(/databases/$(database)/documents/config/app).data.adminUsernames.hasAny([
-              request.resource.data.username
-            ])
-          )
-        );
-      allow update, delete: if isAdmin();
+      allow read, write: if false;
     }
 
     // Content bank overrides (questions/tasks edited in admin)

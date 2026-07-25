@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { LoginScreen } from '../screens/LoginScreen';
-import { ensureAdminBootstrap } from '../utils/admin';
 import { subscribeContentOverrides } from '../utils/contentOverrides';
 import { subscribeAuth } from '../utils/userAuth';
 
@@ -30,7 +29,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
       setUnlocked(ok);
       setChecking(false);
       if (ok) {
-        void ensureAdminBootstrap();
         contentUnsub();
         contentUnsub = subscribeContentOverrides();
       }

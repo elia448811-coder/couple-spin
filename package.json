@@ -28,6 +28,7 @@
     "check:email-auth": "node scripts/check-email-auth.mjs",
     "ensure:test-users": "node scripts/ensure-test-users.mjs",
     "seed:admin": "node scripts/seed-admin-config.mjs",
+    "ensure:sole-admin": "node scripts/ensure-sole-admin.mjs",
     "export:questions": "node scripts/export-questions.mjs",
     "deploy:firestore": "node scripts/deploy-firestore.mjs",
     "prebuild": "node scripts/generate-pwa-icons.mjs"
