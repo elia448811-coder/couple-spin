@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { isFirebaseConfigured } from '../lib/firebase';
 import {
-  registerWithEmail,
-  signInWithEmail,
+  registerWithUsername,
+  signInWithUsername,
   signOutUser,
   subscribeAuth,
+  type AuthUserView,
 } from '../utils/userAuth';
 import {
   getCachedUserProfile,
@@ -21,14 +22,10 @@ type UserAccountPanelProps = {
 type Mode = 'login' | 'register' | 'profile';
 
 export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
-  const [authUser, setAuthUser] = useState<{
-    uid: string;
-    email: string | null;
-    isAnonymous: boolean;
-  } | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUserView | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(() => getCachedUserProfile());
-  const [mode, setMode] = useState<Mode>('register');
-  const [email, setEmail] = useState('');
+  const [mode, setMode] = useState<Mode>('login');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [partnerName, setPartnerName] = useState(profile?.partnerDisplayName ?? '');
@@ -55,7 +52,7 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
     });
   }, [guest, authUser?.uid]);
 
-  const signedInWithEmail = Boolean(authUser && !authUser.isAnonymous && authUser.email);
+  const signedIn = Boolean(authUser && !authUser.isAnonymous && authUser.email);
 
   const saveProfile = async () => {
     setBusy(true);
@@ -80,7 +77,7 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
     setError('');
     setMessage('');
     if (guest) setGuestMode(false);
-    const result = await registerWithEmail(email, password, displayName || email.split('@')[0] || 'שחקן');
+    const result = await registerWithUsername(username, password, username);
     setBusy(false);
     if (!result.ok) {
       setError(result.error ?? 'הרשמה נכשלה');
@@ -97,7 +94,7 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
     setError('');
     setMessage('');
     if (guest) setGuestMode(false);
-    const result = await signInWithEmail(email, password);
+    const result = await signInWithUsername(username, password);
     setBusy(false);
     if (!result.ok) {
       setError(result.error ?? 'התחברות נכשלה');
@@ -141,7 +138,7 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
         חשבון משתמש
       </h2>
       <p className="custom-content-panel__hint">
-        צרו חשבון עם אימייל וסיסמה, או התחברו — הפרופיל נשמר ב-Firestore.
+        התחברות עם שם משתמש וסיסמה בלבד — הפרופיל נשמר בענן.
       </p>
 
       {guest && (
@@ -150,15 +147,8 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
         </p>
       )}
 
-      {!signedInWithEmail && (
+      {!signedIn && (
         <div className="hub-actions-row" style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            className={`hub-btn pressable ${mode === 'register' ? 'hub-btn--primary' : 'hub-btn--ghost'}`}
-            onClick={() => setMode('register')}
-          >
-            הרשמה
-          </button>
           <button
             type="button"
             className={`hub-btn pressable ${mode === 'login' ? 'hub-btn--primary' : 'hub-btn--ghost'}`}
@@ -166,39 +156,34 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
           >
             התחברות
           </button>
+          <button
+            type="button"
+            className={`hub-btn pressable ${mode === 'register' ? 'hub-btn--primary' : 'hub-btn--ghost'}`}
+            onClick={() => setMode('register')}
+          >
+            הרשמה
+          </button>
         </div>
       )}
 
-      {signedInWithEmail && (
+      {signedIn && (
         <p className="history-hint">
-          מחוברים כ־{authUser?.email}
+          מחוברים כ־{authUser?.username ?? authUser?.email}
           {profile ? ` · ערבים: ${profile.gamesPlayed}` : ''}
         </p>
       )}
 
-      {(mode === 'register' || mode === 'login') && !signedInWithEmail && (
+      {(mode === 'register' || mode === 'login') && !signedIn && (
         <>
-          {mode === 'register' && (
-            <label className="settings-field">
-              <span>השם שלי</span>
-              <input
-                type="text"
-                maxLength={32}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="שם לתצוגה"
-                autoComplete="nickname"
-              />
-            </label>
-          )}
           <label className="settings-field">
-            <span>אימייל</span>
+            <span>שם משתמש</span>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@email.com"
-              autoComplete="email"
+              type="text"
+              maxLength={24}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="לדוגמה: dana_love"
+              autoComplete="username"
               dir="ltr"
             />
           </label>
@@ -217,7 +202,7 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
             <button
               type="button"
               className="primary-action pressable"
-              disabled={busy || !email.trim() || password.length < 6}
+              disabled={busy || username.trim().length < 3 || password.length < 6}
               onClick={() => void (mode === 'register' ? handleRegister() : handleLogin())}
             >
               {busy ? 'רגע...' : mode === 'register' ? 'צרו חשבון' : 'התחברו'}
@@ -226,10 +211,10 @@ export function UserAccountPanel({ onChanged }: UserAccountPanelProps) {
         </>
       )}
 
-      {signedInWithEmail && (
+      {signedIn && (
         <>
           <label className="settings-field">
-            <span>השם שלי</span>
+            <span>השם שלי במשחק</span>
             <input
               type="text"
               maxLength={32}

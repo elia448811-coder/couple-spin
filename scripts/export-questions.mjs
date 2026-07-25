@@ -111,7 +111,7 @@ lines.push('  סוף הקובץ');
 lines.push('══════════════════════════════════════════');
 lines.push('');
 
-const outPath = join(root, 'שאלות.txt');
+const outPath = join(root, 'שאלות');
 writeFileSync(outPath, lines.join('\n'), 'utf8');
 console.log(`✓ נוצר: ${outPath}`);
 console.log(`  ${total} שאלות`);
