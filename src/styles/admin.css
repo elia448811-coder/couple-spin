@@ -1,3 +1,41 @@
+/* Side entry — only rendered when sole admin Auth identity matches */
+.admin-side-btn {
+  position: fixed;
+  left: 12px;
+  top: 42%;
+  z-index: 45;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  min-width: 56px;
+  padding: 0.7rem 0.55rem;
+  border: 1px solid color-mix(in srgb, #ffd6e7 35%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(160deg, #3a1d3a 0%, #1a1228 100%);
+  color: #ffe6f1;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-side-btn__icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.admin-side-btn__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.admin-side-btn:hover,
+.admin-side-btn:focus-visible {
+  outline: none;
+  border-color: #ff9ec4;
+  transform: translateY(-1px);
+}
+
 .admin-screen .settings-card {
   width: min(960px, 100%);
 }

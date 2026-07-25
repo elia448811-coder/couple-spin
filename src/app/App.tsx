@@ -248,6 +248,7 @@ function AppContent() {
               onSettings={go(navigate, 'settings')}
               onTutorial={go(navigate, 'tutorial')}
               onSurprise={handleSurpriseEvening}
+              onOpenAdmin={go(navigate, 'admin')}
               playerOneName={settings.playerOneName}
               playerTwoName={settings.playerTwoName}
               stats={hubStats}

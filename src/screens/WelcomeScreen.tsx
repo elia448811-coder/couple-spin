@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { getContentBankStats } from '../data/allContent';
 import { PartnerConnectPanel } from '../components/PartnerConnectPanel';
+import { isCurrentUserAdmin } from '../utils/admin';
 import { isFeatureEnabled } from '../utils/featureFlags';
+import { subscribeAuth } from '../utils/userAuth';
 import type { CoupleRoom, RoomPlayer, RoomRole } from '../utils/coupleRoom';
 
 type HubStats = {
@@ -15,6 +18,7 @@ type WelcomeScreenProps = {
   onSettings: () => void;
   onTutorial: () => void;
   onSurprise: () => void;
+  onOpenAdmin?: () => void;
   playerOneName: string;
   playerTwoName: string;
   stats: HubStats;
@@ -40,6 +44,7 @@ export function WelcomeScreen({
   onSettings,
   onTutorial,
   onSurprise,
+  onOpenAdmin,
   playerOneName,
   playerTwoName,
   stats,
@@ -62,9 +67,38 @@ export function WelcomeScreen({
   const { total, tasks, questions } = getContentBankStats();
   const roomBlocksStart = Boolean(coupleRoom && coupleConnected && !coupleAllReady);
   const surpriseEnabled = isFeatureEnabled('enableSurpriseMode');
+  const [showAdminEntry, setShowAdminEntry] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      void isCurrentUserAdmin().then((ok) => {
+        if (alive) setShowAdminEntry(ok);
+      });
+    };
+    refresh();
+    const unsub = subscribeAuth(() => refresh());
+    return () => {
+      alive = false;
+      unsub();
+    };
+  }, []);
 
   return (
     <section className="page-screen flow-screen welcome-screen hub-screen">
+      {showAdminEntry && onOpenAdmin && (
+        <button
+          type="button"
+          className="admin-side-btn pressable"
+          onClick={onOpenAdmin}
+          aria-label="לוח ניהול מערכת"
+        >
+          <span className="admin-side-btn__icon" aria-hidden>
+            ⚙️
+          </span>
+          <span className="admin-side-btn__label">ניהול</span>
+        </button>
+      )}
       <div className="hub-layout">
         <header className="hub-hero animate-in">
           <div className="hub-hero__glow" aria-hidden />
