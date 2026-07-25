@@ -1,16 +1,15 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v27_SOLE_ADMIN - only elia448811@gmail.com is admin
+// DOUBLE_GAME_RULES_v28_ADMIN_UID - sole admin UID tpbKWXtXWFapFC7Fd80Wd4IMqxC2
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
       return request.auth != null;
     }
 
-    // Hard-locked sole admin — cannot be granted to anyone else via data/UI.
+    // Hard-locked sole admin by Firebase Auth UID (cannot be spoofed from the client).
     function isAdmin() {
       return isAuth()
-        && request.auth.token.email is string
-        && request.auth.token.email.lower() == 'elia448811@gmail.com';
+        && request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2';
     }
 
     function roomDoc(roomId) {
@@ -242,11 +241,12 @@ service cloud.firestore {
     // Public site settings (login page needs registration toggle before auth)
     match /config/{docId} {
       allow read: if true;
-      allow create, update: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.updatedBy == request.auth.uid;
       allow delete: if false;
     }
 
-    // Legacy admins collection — locked; sole admin is email-based only
+    // Legacy admins collection — locked forever
     match /admins/{uid} {
       allow read, write: if false;
     }
@@ -254,7 +254,9 @@ service cloud.firestore {
     // Content bank overrides (questions/tasks edited in admin)
     match /contentItems/{itemId} {
       allow read: if isAuth();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if isAdmin();
     }
 
     // Root user account document

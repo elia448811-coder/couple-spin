@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { builtInContent, getContentBankStats } from '../data/allContent';
-import { isCurrentUserAdmin, SOLE_ADMIN_EMAIL } from '../utils/admin';
+import { getSoleAdminUid, isCurrentUserAdmin, SOLE_ADMIN_EMAIL } from '../utils/admin';
 import {
   builtInToEditable,
   deleteContentOverride,
@@ -209,6 +209,8 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
 
         <p className="history-hint" dir="ltr">
           Admin: {SOLE_ADMIN_EMAIL}
+          <br />
+          UID: {getSoleAdminUid()}
         </p>
         <p className="history-hint">
           מאגר פעיל: {stats.total} פריטים ({stats.questions} שאלות · {stats.tasks} משימות)

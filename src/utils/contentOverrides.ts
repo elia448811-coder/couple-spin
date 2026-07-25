@@ -8,6 +8,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
+import { assertAdmin } from './admin';
 import type { ContentKind, CoupleTask, TaskCategory, TaskLevel } from '../types/game';
 
 export type ContentItemDoc = {
@@ -138,13 +139,19 @@ export function subscribeContentOverrides(onChange?: (items: ContentItemDoc[]) =
 }
 
 export async function upsertContentItem(item: Omit<ContentItemDoc, 'updatedAtMs'>): Promise<void> {
+  const adminUid = await assertAdmin();
   const db = await getFirestoreDb();
   if (!db) throw new Error('Firestore לא זמין');
-  const payload: ContentItemDoc = { ...item, updatedAtMs: Date.now() };
+  const payload: ContentItemDoc & { updatedByUid: string } = {
+    ...item,
+    updatedAtMs: Date.now(),
+    updatedByUid: adminUid,
+  };
   await setDoc(doc(db, 'contentItems', item.id), payload, { merge: true });
 }
 
 export async function deleteContentOverride(id: string): Promise<void> {
+  await assertAdmin();
   const db = await getFirestoreDb();
   if (!db) throw new Error('Firestore לא זמין');
   await deleteDoc(doc(db, 'contentItems', id));

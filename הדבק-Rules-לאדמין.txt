@@ -1,19 +1,17 @@
-חובה — Rules לאדמין היחיד:
+חובה — Rules עם מזהה אדמין קשיח:
 
 1. פתחו F:\GAMED\PASTE-FIREBASE-RULES.txt
 2. סמנו הכול → העתיקו
 3. Firebase → Firestore → Rules → Publish
-4. חובה לראות: DOUBLE_GAME_RULES_v27_SOLE_ADMIN
+4. חובה לראות: DOUBLE_GAME_RULES_v28_ADMIN_UID
 
-האדמין היחיד לנצח:
-  elia448811@gmail.com
+האדמין היחיד (לפי מזהה Auth, אי אפשר לזייף):
+  UID: tpbKWXtXWFapFC7Fd80Wd4IMqxC2
+  אימייל (לכניסה): elia448811@gmail.com
 
-אי אפשר להגדיר מנהל אחר בממשק או בנתונים.
+כל כתיבה לניהול נבדקת פעמיים:
+  1) באפליקציה — assertAdmin() מול ה-UID מהתחברות Firebase
+  2) במאגר — isAdmin() ב-Rules מול request.auth.uid
 
-יצירת חשבון האדמין (פעם אחת), עם הסיסמה שלכם:
-  npm run ensure:sole-admin -- YourPasswordHere
-
-כניסה באתר:
-  שם משתמש / אימייל: elia448811@gmail.com
-  + הסיסמה שבחרתם
-  → הגדרות → פתיחת לוח ניהול
+ב-Vercel / .env.local:
+  VITE_ADMIN_UID=tpbKWXtXWFapFC7Fd80Wd4IMqxC2

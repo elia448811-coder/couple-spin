@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
+import { assertAdmin } from './admin';
 
 export type SiteConfig = {
   registrationEnabled: boolean;
@@ -76,9 +77,10 @@ export function subscribeSiteConfig(listener: (config: SiteConfig) => void): () 
 
 export async function saveSiteConfig(
   patch: Partial<Pick<SiteConfig, 'registrationEnabled' | 'welcomeTitle' | 'welcomeSubtitle'>>,
-  updatedBy: string,
+  updatedBy?: string,
 ): Promise<SiteConfig | null> {
   if (!isFirebaseConfigured()) return null;
+  const adminUid = await assertAdmin();
   const db = await getFirestoreDb();
   if (!db) return null;
   const current = await fetchSiteConfig();
@@ -89,7 +91,7 @@ export async function saveSiteConfig(
     welcomeSubtitle:
       (patch.welcomeSubtitle ?? current.welcomeSubtitle).trim().slice(0, 200) || DEFAULT_SITE_CONFIG.welcomeSubtitle,
     updatedAtMs: Date.now(),
-    updatedBy,
+    updatedBy: updatedBy || adminUid,
   };
   await setDoc(doc(db, 'config', 'app'), next, { merge: true });
   return next;
