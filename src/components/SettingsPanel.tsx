@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CustomContentPanel } from './CustomContentPanel';
 import { PrivacyPanel } from './PrivacyPanel';
 import { UserAccountPanel } from './UserAccountPanel';
 import { RadioGroup } from './RadioGroup';
 import { clearAllLocalData, loadHistory, loadRecords, loadUnlockedAchievements } from '../utils/storage';
 import { getFeatureFlags, setFeatureFlag } from '../utils/featureFlags';
-import { logoutSite } from '../utils/siteGate';
+import { ensureAdminBootstrap, isCurrentUserAdmin } from '../utils/admin';
+import { signOutUser } from '../utils/userAuth';
 import { ACHIEVEMENTS, AVATAR_OPTIONS, PLAYER_COLORS } from '../types/game';
 import type { AnimationStyle, AppSettings, BgTheme, FontChoice, SoundPack, SpinnerStyle } from '../types/game';
 
@@ -14,6 +15,7 @@ type SettingsPanelProps = {
   onUpdate: (partial: Partial<AppSettings>) => void;
   onResetScores: () => void;
   onBack: () => void;
+  onOpenAdmin?: () => void;
   buildVersion?: string;
 };
 
@@ -42,12 +44,27 @@ const SOUND_PACKS: { value: SoundPack; label: string }[] = [
   { value: 'playful', label: 'שמח' },
 ];
 
-export function SettingsPanel({ settings, onUpdate, onResetScores, onBack, buildVersion }: SettingsPanelProps) {
+export function SettingsPanel({
+  settings,
+  onUpdate,
+  onResetScores,
+  onBack,
+  onOpenAdmin,
+  buildVersion,
+}: SettingsPanelProps) {
   const records = loadRecords();
   const history = loadHistory();
   const achievements = loadUnlockedAchievements();
   const [cleared, setCleared] = useState(false);
   const [flags, setFlags] = useState(getFeatureFlags);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      await ensureAdminBootstrap();
+      setIsAdmin(await isCurrentUserAdmin());
+    })();
+  }, []);
 
   const toggleFlag = (key: 'enablePartnerControl' | 'enableSurpriseMode') => {
     const next = !flags[key];
@@ -233,6 +250,19 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack, build
       </div>
 
       <UserAccountPanel />
+
+      {isAdmin && onOpenAdmin && (
+        <section className="settings-group">
+          <h2 className="settings-label">ניהול מערכת</h2>
+          <p className="custom-content-panel__hint">
+            עריכת שאלות, עמוד כניסה, הרשמה ומנהלים.
+          </p>
+          <button type="button" className="primary-action pressable" onClick={onOpenAdmin}>
+            פתיחת לוח ניהול
+          </button>
+        </section>
+      )}
+
       <CustomContentPanel matureAgeConfirmed={settings.matureAgeConfirmed} />
       <PrivacyPanel />
 
@@ -278,11 +308,10 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack, build
           type="button"
           className="secondary-action pressable"
           onClick={() => {
-            void logoutSite();
-            window.location.reload();
+            void signOutUser().then(() => window.location.reload());
           }}
         >
-          יציאה מהשער (logout)
+          התנתקות מהחשבון
         </button>
       </div>
 

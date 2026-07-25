@@ -42,7 +42,8 @@ export type Screen =
   | 'tutorial'
   | 'game'
   | 'end'
-  | 'settings';
+  | 'settings'
+  | 'admin';
 
 export type CoupleTask = {
   id: string;

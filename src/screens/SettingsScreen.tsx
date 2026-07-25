@@ -6,6 +6,7 @@ type SettingsScreenProps = {
   onUpdate: (partial: Partial<AppSettings>) => void;
   onResetScores: () => void;
   onBack: () => void;
+  onOpenAdmin?: () => void;
   buildVersion?: string;
 };
 
@@ -14,6 +15,7 @@ export function SettingsScreen({
   onUpdate,
   onResetScores,
   onBack,
+  onOpenAdmin,
   buildVersion,
 }: SettingsScreenProps) {
   return (
@@ -33,6 +35,7 @@ export function SettingsScreen({
           onUpdate={onUpdate}
           onResetScores={onResetScores}
           onBack={onBack}
+          onOpenAdmin={onOpenAdmin}
           buildVersion={buildVersion}
         />
       </div>

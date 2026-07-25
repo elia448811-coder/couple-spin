@@ -38,6 +38,9 @@ const EndScreen = lazy(() => import('../screens/EndScreen').then((m) => ({ defau
 const SettingsScreen = lazy(() =>
   import('../screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })),
 );
+const AdminScreen = lazy(() =>
+  import('../screens/AdminScreen').then((m) => ({ default: m.AdminScreen })),
+);
 
 function ScreenFallback() {
   return (
@@ -362,9 +365,12 @@ function AppContent() {
             onUpdate={updateSettings}
             onResetScores={resetScores}
             onBack={go(navigate, 'welcome')}
+            onOpenAdmin={go(navigate, 'admin')}
             buildVersion={buildVersion}
           />
         )}
+
+        {game.screen === 'admin' && <AdminScreen onBack={go(navigate, 'settings')} />}
       </Suspense>
 
       <MiniRobot

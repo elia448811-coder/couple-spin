@@ -1,0 +1,16 @@
+חובה פעם אחת אחרי העדכון:
+
+1. פתחו F:\GAMED\PASTE-FIREBASE-RULES.txt
+2. סמנו הכול → העתיקו
+3. Firebase Console → Firestore → Rules
+   https://console.firebase.google.com/project/double-game-dd845/firestore/rules
+4. הדביקו → Publish
+5. חובה לראות: DOUBLE_GAME_RULES_v26_ADMIN
+
+אחר כך במחשב (אופציונלי):
+  npm run seed:admin
+
+כניסה לאדמין באתר:
+  שם משתמש: test_host
+  סיסמה: CoupleTest1!
+  הגדרות → פתיחת לוח ניהול

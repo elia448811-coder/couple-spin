@@ -4,9 +4,13 @@ import { intimacyQuestions } from './intimacyQuestions';
 import { meet100Questions } from './meet100Questions';
 import { matureQuestions, matureTasks } from './matureContent';
 import { getCustomCoupleTasks } from '../utils/customContent';
+import {
+  getCachedContentOverrides,
+  mergeContentWithOverrides,
+} from '../utils/contentOverrides';
 import type { ContentKind, CoupleTask } from '../types/game';
 
-const builtInContent: CoupleTask[] = [
+export const builtInContent: CoupleTask[] = [
   ...allTasks,
   ...allQuestions,
   ...meet100Questions,
@@ -15,9 +19,13 @@ const builtInContent: CoupleTask[] = [
   ...matureQuestions,
 ];
 
-/** מאגר מלא כולל תוכן מותאם אישית מה-localStorage */
+/** מאגר מלא כולל overrides מענן + תוכן מותאם מקומי */
 export function getAllContent(): CoupleTask[] {
-  return [...builtInContent, ...getCustomCoupleTasks()];
+  return mergeContentWithOverrides(
+    builtInContent,
+    getCachedContentOverrides(),
+    getCustomCoupleTasks(),
+  );
 }
 
 /** @deprecated השתמשו ב-getAllContent() — נשמר לתאימות */
@@ -32,18 +40,11 @@ export function contentKind(item: CoupleTask): ContentKind {
 }
 
 export function getContentBankStats() {
+  const all = getAllContent();
   const custom = getCustomCoupleTasks();
-  const customTasks = custom.filter((c) => (c.kind ?? 'task') === 'task').length;
-  const customQuestions = custom.filter((c) => c.kind === 'question').length;
-
-  const tasks = allTasks.length + matureTasks.length + customTasks;
-  const questions =
-    allQuestions.length +
-    meet100Questions.length +
-    intimacyQuestions.length +
-    matureQuestions.length +
-    customQuestions;
-  return { tasks, questions, total: tasks + questions, custom: custom.length };
+  const tasks = all.filter((c) => (c.kind ?? 'task') === 'task').length;
+  const questions = all.filter((c) => c.kind === 'question').length;
+  return { tasks, questions, total: tasks + questions, custom: custom.length, builtIn: builtInContent.length };
 }
 
 export function isMatureContent(item: CoupleTask): boolean {
