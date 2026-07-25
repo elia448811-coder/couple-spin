@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { GameHeader } from '../components/GameHeader';
 import { ProgressBar } from '../components/ProgressBar';
 import { SpinnerWheel } from '../components/SpinnerWheel';
@@ -57,6 +57,7 @@ export function GameScreen({
     soundPack: settings.soundPack,
     segments,
   });
+  const [confirmEnd, setConfirmEnd] = useState(false);
 
   const progressCurrent = useMemo(() => {
     if (game.gameFormat === 'rounds') return game.stats.roundNumber;
@@ -124,9 +125,23 @@ export function GameScreen({
           onSpin={handleSpin}
         />
 
-        <button type="button" className="game-end-link pressable" onClick={onEndGame}>
-          סיום משחק
-        </button>
+        {!confirmEnd ? (
+          <button type="button" className="game-end-link pressable" onClick={() => setConfirmEnd(true)}>
+            סיום משחק
+          </button>
+        ) : (
+          <div className="game-end-confirm">
+            <p>לסיים את המשחק עכשיו?</p>
+            <div className="game-end-confirm__actions">
+              <button type="button" className="primary-action pressable" onClick={onEndGame}>
+                כן, סיימו
+              </button>
+              <button type="button" className="secondary-action pressable" onClick={() => setConfirmEnd(false)}>
+                המשך לשחק
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {game.currentTask && (

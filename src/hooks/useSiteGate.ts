@@ -6,6 +6,7 @@ export function useSiteGate() {
   const [unlocked, setUnlocked] = useState(!gateEnabled);
   const [checking, setChecking] = useState(gateEnabled);
   const [rateLimited, setRateLimited] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
 
   useEffect(() => {
     if (!gateEnabled) return;
@@ -31,10 +32,15 @@ export function useSiteGate() {
 
     setChecking(true);
     setRateLimited(false);
+    setNetworkError(false);
     try {
       const result = await verifySitePassword(password);
       if (result.rateLimited) {
         setRateLimited(true);
+        return false;
+      }
+      if (result.networkError) {
+        setNetworkError(true);
         return false;
       }
       if (result.ok) setUnlocked(true);
@@ -44,5 +50,5 @@ export function useSiteGate() {
     }
   }, [gateEnabled]);
 
-  return { gateEnabled, unlocked, unlock, checking, rateLimited };
+  return { gateEnabled, unlocked, unlock, checking, rateLimited, networkError };
 }

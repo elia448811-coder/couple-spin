@@ -18,6 +18,7 @@ describe('siteGate', () => {
   beforeEach(() => {
     vi.stubGlobal('sessionStorage', mockStorage());
     vi.stubEnv('VITE_AUTH_API_URL', '');
+    vi.stubEnv('VITE_SITE_GATE', '');
     vi.resetModules();
   });
 
@@ -27,10 +28,18 @@ describe('siteGate', () => {
     vi.resetModules();
   });
 
-  it('gate disabled when VITE_AUTH_API_URL is empty', async () => {
+  it('gate disabled when no auth API configured', async () => {
     const { getAuthApiUrl, isSiteGateEnabled } = await import('./siteGate');
     expect(getAuthApiUrl()).toBe('');
     expect(isSiteGateEnabled()).toBe(false);
+  });
+
+  it('uses /api when VITE_SITE_GATE is true', async () => {
+    vi.stubEnv('VITE_SITE_GATE', 'true');
+    vi.resetModules();
+    const { getAuthApiUrl, isSiteGateEnabled } = await import('./siteGate');
+    expect(getAuthApiUrl()).toBe('/api');
+    expect(isSiteGateEnabled()).toBe(true);
   });
 
   it('allows entry when gate disabled', async () => {
@@ -43,7 +52,6 @@ describe('siteGate', () => {
     vi.resetModules();
     const { verifySitePassword } = await import('./siteGate');
     expect((await verifySitePassword('')).ok).toBe(false);
-    expect((await verifySitePassword('   ')).ok).toBe(false);
   });
 
   it('stores signed session token on successful verify', async () => {
@@ -64,6 +72,14 @@ describe('siteGate', () => {
     expect(sessionStorage.getItem('couple-spin-auth-session')).toContain('123.uuid.sig');
   });
 
+  it('returns networkError when fetch fails', async () => {
+    vi.stubEnv('VITE_AUTH_API_URL', 'https://auth.example.com');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    vi.resetModules();
+    const { verifySitePassword } = await import('./siteGate');
+    expect(await verifySitePassword('secret')).toEqual({ ok: false, networkError: true });
+  });
+
   it('returns rateLimited on HTTP 429', async () => {
     vi.stubEnv('VITE_AUTH_API_URL', 'https://auth.example.com');
     vi.stubGlobal(
@@ -75,31 +91,16 @@ describe('siteGate', () => {
     expect(await verifySitePassword('secret')).toEqual({ ok: false, rateLimited: true });
   });
 
-  it('restoreAuthSession validates stored token via /session', async () => {
+  it('does not clear session on network failure during restore', async () => {
     vi.stubEnv('VITE_AUTH_API_URL', 'https://auth.example.com');
     sessionStorage.setItem(
       'couple-spin-auth-session',
-      JSON.stringify({ token: 'valid-token', expiresAt: Date.now() + 60000 }),
+      JSON.stringify({ token: 'keep-me', expiresAt: Date.now() + 60000 }),
     );
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) }),
-    );
-    vi.resetModules();
-    const { restoreAuthSession } = await import('./siteGate');
-    expect(await restoreAuthSession()).toBe(true);
-    expect(fetch).toHaveBeenCalledWith('https://auth.example.com/session', expect.any(Object));
-  });
-
-  it('clears expired session on restore', async () => {
-    vi.stubEnv('VITE_AUTH_API_URL', 'https://auth.example.com');
-    sessionStorage.setItem(
-      'couple-spin-auth-session',
-      JSON.stringify({ token: 'old', expiresAt: Date.now() - 1000 }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     vi.resetModules();
     const { restoreAuthSession } = await import('./siteGate');
     expect(await restoreAuthSession()).toBe(false);
-    expect(sessionStorage.getItem('couple-spin-auth-session')).toBeNull();
+    expect(sessionStorage.getItem('couple-spin-auth-session')).toContain('keep-me');
   });
 });

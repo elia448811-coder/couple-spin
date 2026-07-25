@@ -50,7 +50,6 @@ function AppContent() {
   } = useGameState();
 
   const isGame = game.screen === 'game';
-  const showRobot = game.screen !== 'game';
 
   return (
     <main className={`app-shell ${isGame ? 'app-shell--focus' : ''}`} dir="rtl">
@@ -150,14 +149,12 @@ function AppContent() {
         />
       )}
 
-      {showRobot && (
-        <MiniRobot
-          game={game}
-          settings={settings}
-          effectiveTarget={effectiveTarget}
-          soundEnabled={settings.soundEnabled}
-        />
-      )}
+      <MiniRobot
+        game={game}
+        settings={settings}
+        effectiveTarget={effectiveTarget}
+        soundEnabled={settings.soundEnabled}
+      />
     </main>
   );
 }

@@ -92,10 +92,24 @@ function validateSiteGateSource() {
   if (!siteGate.includes('/session') || !siteGate.includes('sessionStorage')) {
     fail('siteGate.ts חייב session token + sessionStorage');
   }
-  if (siteGate.includes('PASS_W')) {
-    fail('siteGate.ts לא צריך להכיל PASS_W');
+  if (siteGate.includes('PASS_W') || siteGate.includes('SITE_PASSWORD')) {
+    fail('siteGate.ts לא צריך להכיל סיסמה');
   }
   notes.push('siteGate — קריאת API בלבד, ללא סיסמה בקוד');
+}
+
+function validateVercelApi() {
+  for (const f of ['api/verify.js', 'api/session.js', 'api/health.js', 'api/_lib/auth.js']) {
+    if (!existsSync(join(root, f))) fail(`חסר ${f}`);
+  }
+  const auth = read('api/_lib/auth.js');
+  if (!auth.includes('SITE_PASSWORD') || !auth.includes('createSessionToken')) {
+    fail('api/_lib/auth.js חייב SITE_PASSWORD + session tokens');
+  }
+  if (/SITE_PASSWORD\s*=\s*['"]/.test(auth) || /0321/.test(auth)) {
+    fail('סיסמה לא צריכה להיות hardcoded ב-API');
+  }
+  notes.push('Vercel API auth — verify/session/health');
 }
 
 async function probeLiveWorker() {
@@ -150,6 +164,7 @@ console.log('▶ בדיקת מנגנון אימות...\n');
 
 validateWiring();
 validateSiteGateSource();
+validateVercelApi();
 validateWorkerSource();
 scanBundleForSecrets();
 await probeLiveWorker();

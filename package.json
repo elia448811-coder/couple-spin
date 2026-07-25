@@ -1,8 +1,8 @@
 {
   "name": "couple-spin",
   "private": true,
-  "version": "1.0.0",
-  "description": "ספין זוגי — משחק משימות כיפי לזוגות",
+  "version": "1.1.0",
+  "description": "ספין זוגי — משחק משימות ושאלות לזוגות (Couple Spin)",
   "type": "module",
   "engines": {
     "node": ">=20"

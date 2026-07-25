@@ -325,10 +325,12 @@ export function useGameState() {
 
   useEffect(() => {
     clearTimer();
-    if (game.screen !== 'game' || game.timeLimitSeconds === null) return;
+    // שעון נעצר בזמן שמשימה/שאלה פתוחה — כדי שלא ילחצו על הזוג
+    if (game.screen !== 'game' || game.timeLimitSeconds === null || game.currentTask) return;
 
     timerRef.current = setInterval(() => {
       setGame((prev) => {
+        if (prev.currentTask) return prev;
         if (prev.timeRemainingSeconds === null) return prev;
         if (prev.timeRemainingSeconds <= 1) {
           clearTimer();
@@ -347,7 +349,7 @@ export function useGameState() {
     }, 1000);
 
     return clearTimer;
-  }, [game.screen, game.timeLimitSeconds, clearTimer]);
+  }, [game.screen, game.timeLimitSeconds, game.currentTask, clearTimer]);
 
   const handleSpinEnd = useCallback(
     (segmentIndex: number) => {

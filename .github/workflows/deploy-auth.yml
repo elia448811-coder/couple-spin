@@ -21,6 +21,7 @@ jobs:
           node-version: 20
 
       - name: Deploy Cloudflare Worker
+        id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -28,3 +29,9 @@ jobs:
           workingDirectory: worker
           secrets: |
             PASS_W
+
+      - name: Worker URL reminder
+        run: |
+          echo "Worker deployed. Set GitHub Variable VITE_AUTH_API_URL to:"
+          echo "https://couple-spin-auth.<your-subdomain>.workers.dev"
+          echo "Then re-run Deploy workflow (or push to main)."

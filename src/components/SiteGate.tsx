@@ -4,28 +4,24 @@ type SiteGateProps = {
   onUnlock: (password: string) => Promise<boolean>;
   checking?: boolean;
   rateLimited?: boolean;
+  networkError?: boolean;
 };
 
-export function SiteGate({ onUnlock, checking = false, rateLimited = false }: SiteGateProps) {
+export function SiteGate({
+  onUnlock,
+  checking = false,
+  rateLimited = false,
+  networkError = false,
+}: SiteGateProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
-  const [networkError, setNetworkError] = useState(false);
   const [shake, setShake] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setNetworkError(false);
+    setError(false);
 
-    let ok: boolean;
-    try {
-      ok = await onUnlock(password.trim());
-    } catch {
-      setNetworkError(true);
-      setShake(true);
-      window.setTimeout(() => setShake(false), 500);
-      return;
-    }
-
+    const ok = await onUnlock(password.trim());
     if (ok) return;
 
     setError(true);
@@ -58,14 +54,15 @@ export function SiteGate({ onUnlock, checking = false, rateLimited = false }: Si
             onChange={(e) => {
               setPassword(e.target.value);
               setError(false);
-              setNetworkError(false);
             }}
             placeholder="הקלידו סיסמה..."
             autoComplete="current-password"
             autoFocus
             disabled={checking}
           />
-          {error && <p className="site-gate__error">סיסמה שגויה — נסו שוב</p>}
+          {error && !rateLimited && !networkError && (
+            <p className="site-gate__error">סיסמה שגויה — נסו שוב</p>
+          )}
           {rateLimited && (
             <p className="site-gate__error">יותר מדי ניסיונות — המתינו כ-15 דקות ונסו שוב</p>
           )}
@@ -82,7 +79,7 @@ export function SiteGate({ onUnlock, checking = false, rateLimited = false }: Si
         </form>
 
         <p className="site-gate__hint">
-          הסיסמה נבדקת בשרת מאובטח · לא נשמרת בקוד · סשן חתום ל-24 שעות (לכל טאב)
+          הסיסמה נבדקת בשרת מאובטח · לא נשמרת בקוד · סשן חתום ל-24 שעות
         </p>
       </div>
     </div>

@@ -164,9 +164,18 @@ export function DiceRollScreen({
 
         <div className="dice-actions">
           {phase === 'idle' && (
-            <button type="button" className="cta-button pressable" onClick={performRoll}>
-              🎲 גלגלו קובייה
-            </button>
+            <>
+              <button type="button" className="cta-button pressable" onClick={performRoll}>
+                🎲 גלגלו קובייה
+              </button>
+              <button
+                type="button"
+                className="flow-link pressable"
+                onClick={() => onStart(Math.random() < 0.5 ? 0 : 1)}
+              >
+                דלגו על הקובייה — התחילו עכשיו
+              </button>
+            </>
           )}
 
           {phase === 'rolling' && (
