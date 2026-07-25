@@ -1,16 +1,11 @@
 import type { ContentKind, CoupleTask, TaskCategory, TaskLevel } from '../types/game';
 
 const CUSTOM_CONTENT_KEY = 'couple-spin-custom-content';
-const CATEGORIES = new Set<TaskCategory>([
-  'funny',
-  'romantic',
-  'challenge',
-  'calm',
-  'creative',
-  'movement',
-  'spicy',
-]);
 const LEVELS = new Set<TaskLevel>(['easy', 'normal', 'advanced']);
+
+function isAllowedCategory(value: unknown): value is TaskCategory {
+  return typeof value === 'string' && /^[a-z][a-z0-9_-]{1,31}$/.test(value);
+}
 
 export type CustomContentItem = {
   id: string;
@@ -40,7 +35,7 @@ function sanitizeItem(raw: unknown): CustomContentItem | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const kind = o.kind === 'question' || o.kind === 'task' ? o.kind : null;
-  const category = CATEGORIES.has(o.category as TaskCategory) ? (o.category as TaskCategory) : null;
+  const category = isAllowedCategory(o.category) ? o.category : null;
   const level = LEVELS.has(o.level as TaskLevel) ? (o.level as TaskLevel) : null;
   const title = typeof o.title === 'string' ? normalizeText(o.title, 120) : '';
   const description = typeof o.description === 'string' ? normalizeText(o.description, 500) : '';
@@ -103,7 +98,7 @@ export function addCustomContent(input: NewCustomContentInput): CustomContentIte
   const title = normalizeText(input.title, 120);
   const description = normalizeText(input.description, 500);
   if (!title || !description) return null;
-  if (!CATEGORIES.has(input.category) || !LEVELS.has(input.level)) return null;
+  if (!isAllowedCategory(input.category) || !LEVELS.has(input.level)) return null;
 
   const item: CustomContentItem = {
     id: `custom-${crypto.randomUUID()}`,

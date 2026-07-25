@@ -1,4 +1,5 @@
 import { getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
+import { isSoleAdminIdentity } from './admin';
 import { ensureAnonAuth } from './cloudSync';
 import { loadSettings, saveSettings } from './storage';
 
@@ -84,7 +85,9 @@ export function getCachedUserProfile(): UserProfile | null {
 
 /** Create or refresh the durable user doc at users/{uid}. */
 export async function ensureUserProfile(
-  partial?: Partial<Pick<UserProfile, 'displayName' | 'partnerDisplayName' | 'avatar' | 'lastRoomId'>>,
+  partial?: Partial<Pick<UserProfile, 'displayName' | 'partnerDisplayName' | 'avatar' | 'lastRoomId'>> & {
+    username?: string;
+  },
 ): Promise<UserProfile | null> {
   if (!isFirebaseConfigured()) return null;
   const user = await ensureAnonAuth();
@@ -117,7 +120,13 @@ export async function ensureUserProfile(
     ...next,
     updatedAt: serverTimestamp(),
   };
-  if (!existing) payload.createdAt = serverTimestamp();
+  if (!existing) {
+    payload.createdAt = serverTimestamp();
+    if (partial?.username?.trim()) payload.username = partial.username.trim().slice(0, 32);
+    // New self-registrations wait for admin approval; sole admin always approved.
+    payload.approved = isSoleAdminIdentity(user.uid, user.email);
+    payload.banned = false;
+  }
   await setDoc(ref, payload, { merge: true });
 
   // Keep legacy meta/profile in sync for older readers.

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { QUESTION_GROUP_LABELS } from '../data/allQuestions';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { CoupleTask } from '../types/game';
-import { CATEGORY_LABELS } from '../types/game';
+import { getCategoryLabel } from '../utils/adminCategories';
 import { CategoryIcon } from './CategoryIcon';
 
 const EXTRA_GROUP_LABELS: Record<string, string> = {};
@@ -130,7 +130,7 @@ export function TaskModal({
           ) : (
             <CategoryIcon category={task.category} size="sm" />
           )}
-          {isQuestion ? groupLabel : CATEGORY_LABELS[task.category]}
+          {isQuestion ? groupLabel : getCategoryLabel(task.category)}
         </div>
 
         <h2 id="task-modal-title" className="task-modal__text">

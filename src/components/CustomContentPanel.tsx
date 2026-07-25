@@ -1,12 +1,10 @@
 import { useState } from 'react';
+import { LEVEL_LABELS, type ContentKind, type TaskCategory, type TaskLevel } from '../types/game';
 import {
-  CATEGORY_ICONS,
-  CATEGORY_LABELS,
-  LEVEL_LABELS,
-  type ContentKind,
-  type TaskCategory,
-  type TaskLevel,
-} from '../types/game';
+  getCachedCategories,
+  getCategoryIcon,
+  getCategoryLabel,
+} from '../utils/adminCategories';
 import {
   addCustomContent,
   loadCustomContent,
@@ -17,16 +15,6 @@ import {
 const CONTENT_KINDS: { value: ContentKind; label: string }[] = [
   { value: 'question', label: 'שאלה' },
   { value: 'task', label: 'משימה' },
-];
-
-const CATEGORIES: TaskCategory[] = [
-  'funny',
-  'romantic',
-  'challenge',
-  'calm',
-  'creative',
-  'movement',
-  'spicy',
 ];
 
 const LEVELS: TaskLevel[] = ['easy', 'normal', 'advanced'];
@@ -45,7 +33,9 @@ export function CustomContentPanel({ matureAgeConfirmed }: CustomContentPanelPro
   const [questionGroup, setQuestionGroup] = useState('');
   const [formError, setFormError] = useState('');
 
-  const visibleCategories = CATEGORIES.filter((c) => c !== 'spicy' || matureAgeConfirmed);
+  const visibleCategories = getCachedCategories()
+    .map((c) => c.id)
+    .filter((c) => c !== 'spicy' || matureAgeConfirmed);
 
   const refresh = () => setItems(loadCustomContent());
 
@@ -107,7 +97,7 @@ export function CustomContentPanel({ matureAgeConfirmed }: CustomContentPanelPro
               className={`target-score-btn ${category === c ? 'target-score-btn--selected' : ''}`}
               onClick={() => setCategory(c)}
             >
-              {CATEGORY_ICONS[c]} {CATEGORY_LABELS[c]}
+              {getCategoryIcon(c)} {getCategoryLabel(c)}
             </button>
           ))}
         </div>
@@ -164,7 +154,7 @@ export function CustomContentPanel({ matureAgeConfirmed }: CustomContentPanelPro
         {formError && <p className="site-gate__error">{formError}</p>}
 
         <button type="button" className="primary-action pressable custom-content-add" onClick={handleAdd}>
-          + הוספה לקטגוריה {CATEGORY_LABELS[category]}
+          + הוספה לקטגוריה {getCategoryLabel(category)}
         </button>
       </div>
 
@@ -177,7 +167,7 @@ export function CustomContentPanel({ matureAgeConfirmed }: CustomContentPanelPro
                 <div className="custom-content-item__meta">
                   <span>{item.kind === 'question' ? '❓' : '🎯'}</span>
                   <span>
-                    {CATEGORY_ICONS[item.category]} {CATEGORY_LABELS[item.category]} · {LEVEL_LABELS[item.level]}
+                    {getCategoryIcon(item.category)} {getCategoryLabel(item.category)} · {LEVEL_LABELS[item.level]}
                   </span>
                   {item.questionGroup && <span className="custom-content-item__group">#{item.questionGroup}</span>}
                 </div>

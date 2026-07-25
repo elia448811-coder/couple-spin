@@ -1,5 +1,5 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v30_ADMIN_CONSOLE
+// DOUBLE_GAME_RULES_v31_ADMIN_USERS_CATEGORIES
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
@@ -243,6 +243,19 @@ service cloud.firestore {
         && request.resource.data.schemaVersion is int;
     }
 
+    function userCreateSafe() {
+      return (!('banned' in request.resource.data) || request.resource.data.banned == false)
+        && (!('approved' in request.resource.data) || request.resource.data.approved == false);
+    }
+
+    function userUpdateSafe() {
+      return (!('banned' in request.resource.data) || request.resource.data.banned == resource.data.get('banned', false))
+        && (
+          !('approved' in request.resource.data)
+          || request.resource.data.approved == resource.data.get('approved', true)
+        );
+    }
+
     // Public site settings (login page needs registration toggle before auth)
     match /config/{docId} {
       allow read: if true;
@@ -267,25 +280,45 @@ service cloud.firestore {
     // Root user account document
     match /users/{userId} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuth()
-        && request.auth.uid == userId
-        && validUserProfile();
+      allow create: if isAuth() && (
+        (
+          request.auth.uid == userId
+          && validUserProfile()
+          && userCreateSafe()
+        )
+        || (
+          isAdmin()
+          && request.resource.data.uid == userId
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 32
+        )
+      );
       allow update: if isAuth()
         && unchanged('uid')
         && unchanged('createdAtMs')
         && (
           (
             request.auth.uid == userId
+            && userUpdateSafe()
             && (
               validUserProfile()
               || request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['lastSeenMs', 'updatedAtMs', 'updatedAt', 'gamesPlayed', 'lastRoomId'])
+                .hasOnly(['lastSeenMs', 'updatedAtMs', 'updatedAt', 'gamesPlayed', 'lastRoomId', 'username'])
             )
           )
           || (
             isAdmin()
             && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['banned', 'adminNote', 'displayName', 'updatedAtMs', 'updatedAt'])
+              .hasOnly([
+                'banned',
+                'adminNote',
+                'displayName',
+                'approved',
+                'username',
+                'updatedAtMs',
+                'updatedAt'
+              ])
           )
         );
       allow delete: if false;

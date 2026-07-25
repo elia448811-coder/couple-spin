@@ -4,7 +4,15 @@ import { meet100Questions } from '../data/meet100Questions';
 import { intimacyQuestions } from '../data/intimacyQuestions';
 import { matureQuestions, matureTasks } from '../data/matureContent';
 import { allTasks } from '../data/allTasks';
-import type { ContentMode, CoupleTask, GameMode, TaskCategory, TaskLevel } from '../types/game';
+import {
+  BUILTIN_TASK_CATEGORIES,
+  type ContentMode,
+  type CoupleTask,
+  type GameMode,
+  type TaskCategory,
+  type TaskLevel,
+} from '../types/game';
+import { getCachedCategories } from './adminCategories';
 import { isTaskHidden, taskAllowedByBoundaries } from './privacy';
 
 const MODE_CATEGORIES: Record<GameMode, TaskCategory[]> = {
@@ -19,7 +27,13 @@ const MODE_CATEGORIES: Record<GameMode, TaskCategory[]> = {
 const LEVEL_ORDER: TaskLevel[] = ['easy', 'normal', 'advanced'];
 
 export function getCategoriesForMode(mode: GameMode): TaskCategory[] {
-  return MODE_CATEGORIES[mode];
+  const base = MODE_CATEGORIES[mode];
+  if (mode !== 'mixed') return base;
+  const builtin = new Set<string>(BUILTIN_TASK_CATEGORIES);
+  const custom = getCachedCategories()
+    .map((c) => c.id)
+    .filter((id) => !builtin.has(id) && id !== 'spicy');
+  return [...base, ...custom];
 }
 
 function levelDown(level: TaskLevel): TaskLevel {

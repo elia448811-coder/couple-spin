@@ -1,53 +1,64 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { isFirebaseConfigured } from '../lib/firebase';
 import { LoginScreen } from '../screens/LoginScreen';
-import { isCurrentUserBanned } from '../utils/adminUsers';
+import { isCurrentUserAdmin } from '../utils/admin';
+import { fetchCategories } from '../utils/adminCategories';
+import { isCurrentUserBanned, isCurrentUserPendingApproval } from '../utils/adminUsers';
 import { subscribeContentOverrides } from '../utils/contentOverrides';
-import { signOutUser, subscribeAuth } from '../utils/userAuth';
+import { getAuthUser, signOutUser, subscribeAuth } from '../utils/userAuth';
 
 type AuthGuardProps = {
   children: ReactNode;
 };
 
+type GateState = 'loading' | 'login' | 'banned' | 'pending' | 'ok';
+
 /**
  * Requires a real Firebase username account (non-anonymous).
- * Replaces the old shared SITE_PASSWORD gate.
+ * New registrations stay locked until an admin approves them.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
-  const [checking, setChecking] = useState(true);
-  const [unlocked, setUnlocked] = useState(false);
-  const [banned, setBanned] = useState(false);
+  const [gate, setGate] = useState<GateState>('loading');
+
+  const evaluate = useCallback(async () => {
+    if (!isFirebaseConfigured()) {
+      setGate('login');
+      return;
+    }
+    const user = await getAuthUser();
+    const ok = Boolean(user && !user.isAnonymous && user.email);
+    if (!ok) {
+      setGate('login');
+      return;
+    }
+
+    if (await isCurrentUserBanned()) {
+      setGate('banned');
+      await signOutUser();
+      return;
+    }
+
+    const isAdmin = await isCurrentUserAdmin();
+    if (!isAdmin && (await isCurrentUserPendingApproval())) {
+      setGate('pending');
+      return;
+    }
+
+    setGate('ok');
+    void fetchCategories();
+  }, []);
 
   useEffect(() => {
     if (!isFirebaseConfigured()) {
-      setChecking(false);
-      setUnlocked(false);
+      setGate('login');
       return;
     }
 
     let contentUnsub = () => {};
-    const unsub = subscribeAuth((user) => {
+    const unsub = subscribeAuth(() => {
       void (async () => {
-        const ok = Boolean(user && !user.isAnonymous && user.email);
-        if (!ok) {
-          setBanned(false);
-          setUnlocked(false);
-          setChecking(false);
-          return;
-        }
-        const isBanned = await isCurrentUserBanned();
-        if (isBanned) {
-          setBanned(true);
-          setUnlocked(false);
-          setChecking(false);
-          await signOutUser();
-          return;
-        }
-        setBanned(false);
-        setUnlocked(true);
-        setChecking(false);
-        contentUnsub();
-        contentUnsub = subscribeContentOverrides();
+        setGate('loading');
+        await evaluate();
       })();
     });
 
@@ -55,9 +66,15 @@ export function AuthGuard({ children }: AuthGuardProps) {
       unsub();
       contentUnsub();
     };
-  }, []);
+  }, [evaluate]);
 
-  if (checking) {
+  useEffect(() => {
+    if (gate !== 'ok') return;
+    const unsub = subscribeContentOverrides();
+    return () => unsub();
+  }, [gate]);
+
+  if (gate === 'loading') {
     return (
       <div className="site-gate site-gate--loading" dir="rtl">
         <div className="site-gate__card">
@@ -67,7 +84,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  if (banned) {
+  if (gate === 'banned') {
     return (
       <div className="site-gate" dir="rtl">
         <div className="site-gate__card">
@@ -78,8 +95,28 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  if (!unlocked) {
-    return <LoginScreen onAuthenticated={() => setUnlocked(true)} />;
+  if (gate === 'pending') {
+    return (
+      <div className="site-gate" dir="rtl">
+        <div className="site-gate__card">
+          <h1 className="site-gate__title">ממתין לאישור</h1>
+          <p className="site-gate__desc">
+            ההרשמה התקבלה. מנהל המערכת צריך לאשר את החשבון לפני הכניסה למשחק.
+          </p>
+          <button
+            type="button"
+            className="primary-action pressable"
+            onClick={() => void signOutUser().then(() => setGate('login'))}
+          >
+            התנתקות
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (gate !== 'ok') {
+    return <LoginScreen onAuthenticated={() => void evaluate()} />;
   }
 
   return <>{children}</>;

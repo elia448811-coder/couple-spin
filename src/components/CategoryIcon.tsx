@@ -1,5 +1,5 @@
-import { CATEGORY_ICONS } from '../types/game';
 import type { TaskCategory } from '../types/game';
+import { getCategoryIcon } from '../utils/adminCategories';
 
 type CategoryIconProps = {
   category: TaskCategory;
@@ -9,7 +9,7 @@ type CategoryIconProps = {
 export function CategoryIcon({ category, size = 'md' }: CategoryIconProps) {
   return (
     <span className={`category-icon category-icon--${size}`} aria-hidden="true">
-      {CATEGORY_ICONS[category]}
+      {getCategoryIcon(category)}
     </span>
   );
 }

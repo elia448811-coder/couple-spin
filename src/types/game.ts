@@ -2,14 +2,20 @@ export type ContentKind = 'task' | 'question';
 
 export type ContentMode = 'tasks' | 'questions' | 'mixed';
 
-export type TaskCategory =
-  | 'funny'
-  | 'romantic'
-  | 'challenge'
-  | 'calm'
-  | 'creative'
-  | 'movement'
-  | 'spicy';
+export const BUILTIN_TASK_CATEGORIES = [
+  'funny',
+  'romantic',
+  'challenge',
+  'calm',
+  'creative',
+  'movement',
+  'spicy',
+] as const;
+
+export type BuiltinTaskCategory = (typeof BUILTIN_TASK_CATEGORIES)[number];
+
+/** Built-in wheel categories, plus custom ids managed in admin. */
+export type TaskCategory = BuiltinTaskCategory | (string & {});
 
 export type TaskLevel = 'easy' | 'normal' | 'advanced';
 
@@ -246,7 +252,7 @@ export const LEVEL_LABELS: Record<TaskLevel, string> = {
   advanced: 'מתקדם',
 };
 
-export const CATEGORY_LABELS: Record<TaskCategory, string> = {
+export const CATEGORY_LABELS: Record<BuiltinTaskCategory, string> = {
   funny: 'מצחיק',
   romantic: 'רומנטי',
   challenge: 'אתגר',
@@ -256,7 +262,7 @@ export const CATEGORY_LABELS: Record<TaskCategory, string> = {
   spicy: '18+',
 };
 
-export const CATEGORY_ICONS: Record<TaskCategory, string> = {
+export const CATEGORY_ICONS: Record<BuiltinTaskCategory, string> = {
   funny: '😂',
   romantic: '💜',
   challenge: '🏆',

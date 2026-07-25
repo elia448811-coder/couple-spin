@@ -11,7 +11,7 @@ export type FirebaseWebConfig = {
   appId: string;
 };
 
-function readConfig(): FirebaseWebConfig | null {
+export function readFirebaseWebConfig(): FirebaseWebConfig | null {
   const apiKey = import.meta.env.VITE_FIREBASE_API_KEY?.trim();
   const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim();
   const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim();
@@ -22,6 +22,10 @@ function readConfig(): FirebaseWebConfig | null {
     return null;
   }
   return { apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId };
+}
+
+function readConfig(): FirebaseWebConfig | null {
+  return readFirebaseWebConfig();
 }
 
 let app: FirebaseApp | null = null;

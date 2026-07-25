@@ -185,7 +185,7 @@ export async function registerWithUsername(
 
     const name = (displayName?.trim() || label).slice(0, 32);
     await updateProfile(user, { displayName: name });
-    await ensureUserProfile({ displayName: name });
+    await ensureUserProfile({ displayName: name, username: label });
 
     return { ok: true, uid: user.uid, username: label, email: user.email };
   } catch (error) {
@@ -208,6 +208,7 @@ export async function signInWithUsername(username: string, password: string): Pr
     const cred = await signInWithEmailAndPassword(auth, email, password);
     await ensureUserProfile({
       displayName: cred.user.displayName || label,
+      username: label,
     });
     return { ok: true, uid: cred.user.uid, username: label, email: cred.user.email };
   } catch (error) {
