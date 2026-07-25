@@ -110,10 +110,14 @@ export function useApplyTheme(settings: {
 }) {
   useEffect(() => {
     const root = document.documentElement;
+    const reduce =
+      settings.animationStyle === 'reduced' ||
+      (typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
     root.setAttribute('data-theme', settings.theme);
     root.setAttribute('data-font', settings.fontChoice);
     root.setAttribute('data-bg', settings.bgTheme);
-    root.setAttribute('data-anim', settings.animationStyle);
+    root.setAttribute('data-anim', reduce ? 'reduced' : settings.animationStyle);
     root.setAttribute('data-colorblind', String(settings.colorblindMode));
     root.style.setProperty('--player-one', settings.playerOneColor);
     root.style.setProperty('--player-two', settings.playerTwoColor);

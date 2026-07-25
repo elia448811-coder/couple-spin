@@ -1,4 +1,5 @@
 import type { AppSettings, ContentMode, GameMode, GameState, TaskCategory, TaskLevel } from '../types/game';
+import { buildFinishedGame } from './gameFinish';
 import { getDefaultRoundTarget, getEffectiveTarget, getTimeLimitForFormat } from '../types/game';
 import { checkEndConditions } from './gameEnd';
 import { pickTaskWithFallback } from './pickTaskWithFallback';
@@ -30,6 +31,8 @@ export function createTestGameState(
     roundTarget: 12,
     timeLimitSeconds: null,
     timeRemainingSeconds: null,
+    timeDeadlineMs: null,
+    finishEventId: null,
     stats: {
       totalCompleted: 0,
       totalSkipped: 0,
@@ -107,11 +110,9 @@ export function simulateComplete(state: GameState): GameState {
   const { end, winner } = checkEndConditions(next, next.scores, next.cooperativeScore, next.stats);
   if (!end) return next;
 
-  return {
-    ...next,
-    screen: 'end',
-    winner:
-      winner ??
+  return buildFinishedGame(
+    next,
+    winner ??
       (next.scoringMode === 'cooperative'
         ? 'tie'
         : next.scores[0] > next.scores[1]
@@ -119,7 +120,7 @@ export function simulateComplete(state: GameState): GameState {
           : next.scores[1] > next.scores[0]
             ? 1
             : 'tie'),
-  };
+  );
 }
 
 export function simulateSkip(state: GameState): GameState {
@@ -143,11 +144,9 @@ export function simulateSkip(state: GameState): GameState {
   const { end, winner } = checkEndConditions(next, next.scores, next.cooperativeScore, next.stats);
   if (!end) return next;
 
-  return {
-    ...next,
-    screen: 'end',
-    winner:
-      winner ??
+  return buildFinishedGame(
+    next,
+    winner ??
       (next.scoringMode === 'cooperative'
         ? 'tie'
         : next.scores[0] > next.scores[1]
@@ -155,7 +154,7 @@ export function simulateSkip(state: GameState): GameState {
           : next.scores[1] > next.scores[0]
             ? 1
             : 'tie'),
-  };
+  );
 }
 
 export function simulateStartGame(state: GameState): GameState {
@@ -185,6 +184,8 @@ export function simulateStartGame(state: GameState): GameState {
     sessionNewAchievements: [],
     timeLimitSeconds: timeLimit,
     timeRemainingSeconds: timeLimit,
+    timeDeadlineMs: timeLimit != null ? Date.now() + timeLimit * 1000 : null,
+    finishEventId: null,
     roundTarget:
       state.gameFormat === 'rounds'
         ? state.roundTarget

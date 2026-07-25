@@ -19,6 +19,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+
+      - name: Install + smoke auth wiring
+        run: |
+          npm ci
+          node scripts/test-auth.mjs
 
       - name: Deploy Cloudflare Worker
         id: deploy
@@ -29,9 +35,9 @@ jobs:
           workingDirectory: worker
           secrets: |
             PASS_W
+            SESSION_SECRET
 
       - name: Worker URL reminder
         run: |
-          echo "Worker deployed. Set GitHub Variable VITE_AUTH_API_URL to:"
-          echo "https://couple-spin-auth.<your-subdomain>.workers.dev"
-          echo "Then re-run Deploy workflow (or push to main)."
+          echo "Worker deployed. Set GitHub Variable VITE_AUTH_API_URL to the workers.dev URL."
+          echo "Also set SESSION_SECRET (separate from PASS_W) when possible."

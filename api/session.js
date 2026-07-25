@@ -1,16 +1,32 @@
-import { cors, json, readBody, sitePassword, verifySessionToken } from './_lib/auth.js';
+import {
+  cors,
+  isOriginAllowed,
+  json,
+  readBody,
+  sessionSigningSecret,
+  verifySessionToken,
+} from './_lib/auth.js';
 
 export default async function handler(req, res) {
   const headers = cors(req);
 
   if (req.method === 'OPTIONS') {
+    if (!isOriginAllowed(req)) {
+      json(res, 403, { ok: false, error: 'origin_forbidden' }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     res.writeHead(204, headers);
     res.end();
     return;
   }
 
-  const expected = sitePassword();
-  if (!expected) {
+  if (!isOriginAllowed(req)) {
+    json(res, 403, { ok: false, error: 'origin_forbidden' }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  const secret = sessionSigningSecret();
+  if (!secret) {
     json(res, 503, { ok: false, error: 'not_configured' }, headers);
     return;
   }
@@ -37,7 +53,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const valid = verifySessionToken(expected, token);
+  const valid = verifySessionToken(secret, token);
   if (!valid) {
     json(res, 401, { ok: false, error: 'invalid_session' }, headers);
     return;

@@ -3,9 +3,11 @@ import {
   clientIp,
   cors,
   createSessionToken,
+  isOriginAllowed,
   json,
   MAX_PASSWORD_LEN,
   readBody,
+  sessionSigningSecret,
   sitePassword,
   timingSafeEqual,
 } from './_lib/auth.js';
@@ -14,6 +16,10 @@ export default async function handler(req, res) {
   const headers = cors(req);
 
   if (req.method === 'OPTIONS') {
+    if (!isOriginAllowed(req)) {
+      json(res, 403, { ok: false, error: 'origin_forbidden' }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     res.writeHead(204, headers);
     res.end();
     return;
@@ -21,6 +27,11 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     json(res, 405, { ok: false, error: 'method_not_allowed' }, headers);
+    return;
+  }
+
+  if (!isOriginAllowed(req)) {
+    json(res, 403, { ok: false, error: 'origin_forbidden' }, { 'Cache-Control': 'no-store' });
     return;
   }
 
@@ -37,7 +48,8 @@ export default async function handler(req, res) {
   }
 
   const expected = sitePassword();
-  if (!expected) {
+  const signing = sessionSigningSecret();
+  if (!expected || !signing) {
     json(res, 503, { ok: false, error: 'not_configured' }, headers);
     return;
   }
@@ -57,7 +69,7 @@ export default async function handler(req, res) {
   }
 
   if (timingSafeEqual(input, expected)) {
-    const session = createSessionToken(expected);
+    const session = createSessionToken(signing);
     json(res, 200, { ok: true, token: session.token, expiresAt: session.expiresAt }, headers);
     return;
   }

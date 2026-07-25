@@ -120,6 +120,10 @@ export type GameState = {
   roundTarget: number;
   timeLimitSeconds: number | null;
   timeRemainingSeconds: number | null;
+  /** Absolute deadline (Date.now-based) — timer derives remaining from wall clock */
+  timeDeadlineMs: number | null;
+  /** Idempotency key for finish side-effects (history/records/sound) */
+  finishEventId: string | null;
   stats: GameStats;
   winner: 0 | 1 | 'tie' | null;
   spinCategory: string | null;

@@ -17,8 +17,8 @@ import {
   getSpinnerSegments,
   getTimeLimitForFormat,
 } from '../types/game';
-import { checkAchievements } from '../utils/achievements';
 import { checkEndConditions } from '../utils/gameEnd';
+import { buildFinishedGame, finishPayload } from '../utils/gameFinish';
 import { pickEasierTask, pickHarderTask } from '../utils/taskSelection';
 import { pickTaskWithFallback, spinPickOptions } from '../utils/pickTaskWithFallback';
 import {
@@ -32,6 +32,9 @@ import {
 } from '../utils/storage';
 import { sounds, startBackgroundMusic, stopBackgroundMusic } from '../utils/sound';
 import { useApplyTheme } from './useSpinWheel';
+
+/** Survives StrictMode remount — finish persistence runs once per event id */
+const processedFinishIds = new Set<string>();
 
 function emptyStats(): GameState['stats'] {
   return {
@@ -70,6 +73,8 @@ function createInitialGameState(settings: AppSettings): GameState {
     roundTarget: settings.roundCount,
     timeLimitSeconds: null,
     timeRemainingSeconds: null,
+    timeDeadlineMs: null,
+    finishEventId: null,
     stats: emptyStats(),
     winner: null,
     spinCategory: null,
@@ -227,45 +232,6 @@ export function useGameState() {
     [updateSettings],
   );
 
-  const finalizeGame = useCallback((prev: GameState, winner: GameState['winner']) => {
-    const durationMinutes = Math.max(1, Math.round((Date.now() - prev.stats.startTime) / 60000));
-    const winnerName =
-      winner === 0 ? prev.playerOneName : winner === 1 ? prev.playerTwoName : null;
-
-    const newAchievements = checkAchievements(prev.stats, prev, prev.unlockedAchievements);
-    if (newAchievements.length) saveUnlockedAchievements(newAchievements);
-
-    saveHistoryEntry({
-      id: `${Date.now()}`,
-      date: new Date().toISOString(),
-      eveningName: prev.eveningName || 'ערב זוגי',
-      mode: prev.mode,
-      completed: prev.stats.totalCompleted,
-      skipped: prev.stats.totalSkipped,
-      winner: winnerName,
-      durationMinutes,
-    });
-
-    const records = loadRecords();
-    updateRecords({
-      totalGames: records.totalGames + 1,
-      mostCompleted: Math.max(prev.stats.totalCompleted, records.mostCompleted),
-      longestStreak: Math.max(prev.stats.maxStreak, records.longestStreak),
-      totalTasks: records.totalTasks + prev.stats.totalCompleted,
-    });
-
-    if (settings.soundEnabled) sounds.success(settings.soundPack);
-
-    return {
-      ...prev,
-      winner,
-      screen: 'end' as Screen,
-      currentTask: null,
-      unlockedAchievements: [...prev.unlockedAchievements, ...newAchievements],
-      sessionNewAchievements: newAchievements,
-    };
-  }, [settings.soundEnabled, settings.soundPack]);
-
   const tryFinishRound = useCallback(
     (
       prev: GameState,
@@ -284,9 +250,9 @@ export function useGameState() {
             : next.scores[1] > next.scores[0]
               ? 1
               : 'tie');
-      return finalizeGame(next as GameState, finalWinner);
+      return buildFinishedGame(next as GameState, finalWinner);
     },
-    [finalizeGame],
+    [],
   );
 
   const goToDiceRoll = useCallback(() => {
@@ -294,45 +260,65 @@ export function useGameState() {
   }, []);
 
   const startGame = useCallback((firstPlayer: 0 | 1 = 0) => {
-    const timeLimit = getTimeLimitForFormat(game.gameFormat);
-    setGame((prev) => ({
-      ...prev,
-      screen: 'game',
-      currentPlayerIndex: firstPlayer,
-      scores: [0, 0],
-      cooperativeScore: 0,
-      usedTaskIds: [],
-      currentTask: null,
-      isSpinning: false,
-      wheelLanded: false,
-      stats: emptyStats(),
-      winner: null,
-      spinCategory: null,
-      sessionNewAchievements: [],
-      timeLimitSeconds: timeLimit,
-      timeRemainingSeconds: timeLimit,
-      scoringMode: resolveScoringMode(prev.gameFormat, prev.scoringMode),
-      roundTarget:
-        prev.gameFormat === 'rounds'
-          ? settings.roundCount
-          : getDefaultRoundTarget(prev.gameFormat, settings.roundCount),
-    }));
+    setGame((prev) => {
+      const timeLimit = getTimeLimitForFormat(prev.gameFormat);
+      return {
+        ...prev,
+        screen: 'game',
+        currentPlayerIndex: firstPlayer,
+        scores: [0, 0],
+        cooperativeScore: 0,
+        usedTaskIds: [],
+        currentTask: null,
+        isSpinning: false,
+        wheelLanded: false,
+        stats: emptyStats(),
+        winner: null,
+        spinCategory: null,
+        sessionNewAchievements: [],
+        finishEventId: null,
+        timeLimitSeconds: timeLimit,
+        timeRemainingSeconds: timeLimit,
+        timeDeadlineMs: timeLimit != null ? Date.now() + timeLimit * 1000 : null,
+        scoringMode: resolveScoringMode(prev.gameFormat, prev.scoringMode),
+        roundTarget:
+          prev.gameFormat === 'rounds'
+            ? settings.roundCount
+            : getDefaultRoundTarget(prev.gameFormat, settings.roundCount),
+      };
+    });
     if (settings.soundEnabled) sounds.start(settings.soundPack);
-  }, [game.gameFormat, settings.roundCount, settings.soundEnabled, settings.soundPack]);
+  }, [settings.roundCount, settings.soundEnabled, settings.soundPack]);
 
-  const finalizeRef = useRef(finalizeGame);
-  finalizeRef.current = finalizeGame;
+  /** Persist finish side-effects once (idempotent) */
+  useEffect(() => {
+    if (game.screen !== 'end' || !game.finishEventId) return;
+    if (processedFinishIds.has(game.finishEventId)) return;
+    processedFinishIds.add(game.finishEventId);
+
+    const payload = finishPayload(game);
+    if (payload.achievements.length) saveUnlockedAchievements(payload.achievements);
+    saveHistoryEntry(payload.history);
+    const records = loadRecords();
+    updateRecords({
+      totalGames: records.totalGames + 1,
+      mostCompleted: Math.max(payload.stats.totalCompleted, records.mostCompleted),
+      longestStreak: Math.max(payload.stats.maxStreak, records.longestStreak),
+      totalTasks: records.totalTasks + payload.stats.totalCompleted,
+    });
+    if (settings.soundEnabled) sounds.success(settings.soundPack);
+  }, [game, settings.soundEnabled, settings.soundPack]);
 
   useEffect(() => {
     clearTimer();
-    // שעון נעצר בזמן שמשימה/שאלה פתוחה — כדי שלא ילחצו על הזוג
-    if (game.screen !== 'game' || game.timeLimitSeconds === null || game.currentTask) return;
+    // שעון נעצר בזמן שמשימה פתוחה; remaining מחושב מ־deadline אמיתי
+    if (game.screen !== 'game' || game.timeDeadlineMs === null || game.currentTask) return;
 
-    timerRef.current = setInterval(() => {
+    const tick = () => {
       setGame((prev) => {
-        if (prev.currentTask) return prev;
-        if (prev.timeRemainingSeconds === null) return prev;
-        if (prev.timeRemainingSeconds <= 1) {
+        if (prev.currentTask || prev.timeDeadlineMs === null) return prev;
+        const remaining = Math.max(0, Math.ceil((prev.timeDeadlineMs - Date.now()) / 1000));
+        if (remaining <= 0) {
           clearTimer();
           const w: GameState['winner'] =
             prev.scoringMode === 'cooperative'
@@ -342,14 +328,26 @@ export function useGameState() {
                 : prev.scores[1] > prev.scores[0]
                   ? 1
                   : 'tie';
-          return finalizeRef.current(prev, w);
+          return buildFinishedGame(prev, w);
         }
-        return { ...prev, timeRemainingSeconds: prev.timeRemainingSeconds - 1 };
+        if (remaining === prev.timeRemainingSeconds) return prev;
+        return { ...prev, timeRemainingSeconds: remaining };
       });
-    }, 1000);
+    };
 
-    return clearTimer;
-  }, [game.screen, game.timeLimitSeconds, game.currentTask, clearTimer]);
+    tick();
+    timerRef.current = setInterval(tick, 250);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearTimer();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [game.screen, game.timeDeadlineMs, game.currentTask, clearTimer]);
 
   const handleSpinEnd = useCallback(
     (segmentIndex: number) => {
@@ -393,8 +391,11 @@ export function useGameState() {
         : 0;
 
   const completeTask = useCallback(() => {
+    let completed = false;
+    let finished = false;
     setGame((prev) => {
       if (!prev.currentTask) return prev;
+      completed = true;
 
       const newScores = [...prev.scores] as [number, number];
       let cooperativeScore = prev.cooperativeScore;
@@ -414,10 +415,7 @@ export function useGameState() {
       };
 
       const usedTaskIds = [...prev.usedTaskIds, prev.currentTask.id];
-
-      if (settings.soundEnabled) sounds.success(settings.soundPack);
-
-      return tryFinishRound(prev, {
+      const next = tryFinishRound(prev, {
         scores: newScores,
         cooperativeScore,
         stats,
@@ -425,7 +423,12 @@ export function useGameState() {
         currentTask: null,
         currentPlayerIndex: advanceTurn(prev),
       });
+      finished = next.screen === 'end';
+      return next;
     });
+    if (completed && !finished && settings.soundEnabled) {
+      sounds.success(settings.soundPack);
+    }
   }, [tryFinishRound, settings.soundEnabled, settings.soundPack]);
 
   const skipTask = useCallback(() => {
@@ -529,7 +532,7 @@ export function useGameState() {
 
   const endGame = useCallback(() => {
     setGame((prev) =>
-      finalizeGame(
+      buildFinishedGame(
         prev,
         prev.scoringMode === 'cooperative'
           ? 'tie'
@@ -540,7 +543,7 @@ export function useGameState() {
               : 'tie',
       ),
     );
-  }, [finalizeGame]);
+  }, []);
 
   const newGame = useCallback(() => {
     clearTimer();
@@ -574,8 +577,10 @@ export function useGameState() {
       winner: null,
       spinCategory: null,
       sessionNewAchievements: [],
+      finishEventId: null,
       timeLimitSeconds: null,
       timeRemainingSeconds: null,
+      timeDeadlineMs: null,
     }));
   }, [clearTimer]);
 

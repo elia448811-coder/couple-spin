@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { CustomContentPanel } from './CustomContentPanel';
-import { loadHistory, loadRecords, loadUnlockedAchievements } from '../utils/storage';
+import { clearAllLocalData, loadHistory, loadRecords, loadUnlockedAchievements } from '../utils/storage';
 import { ACHIEVEMENTS, AVATAR_OPTIONS, PLAYER_COLORS } from '../types/game';
 import type { AnimationStyle, AppSettings, BgTheme, FontChoice, SoundPack, SpinnerStyle } from '../types/game';
 
@@ -39,6 +40,7 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
   const records = loadRecords();
   const history = loadHistory();
   const achievements = loadUnlockedAchievements();
+  const [cleared, setCleared] = useState(false);
 
   return (
     <div className="settings-panel">
@@ -77,9 +79,16 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
 
       <div className="settings-group">
         <span className="settings-label">חבילת סאונד</span>
-        <div className="target-score-options">
+        <div className="target-score-options" role="radiogroup" aria-label="חבילת סאונד">
           {SOUND_PACKS.map((p) => (
-            <button key={p.value} type="button" className={`target-score-btn ${settings.soundPack === p.value ? 'target-score-btn--selected' : ''}`} onClick={() => onUpdate({ soundPack: p.value })}>
+            <button
+              key={p.value}
+              type="button"
+              role="radio"
+              aria-checked={settings.soundPack === p.value}
+              className={`target-score-btn ${settings.soundPack === p.value ? 'target-score-btn--selected' : ''}`}
+              onClick={() => onUpdate({ soundPack: p.value })}
+            >
               {p.label}
             </button>
           ))}
@@ -134,9 +143,18 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
             <button key={a} type="button" className={`avatar-opt ${settings.playerOneAvatar === a ? 'selected' : ''}`} onClick={() => onUpdate({ playerOneAvatar: a })}>{a}</button>
           ))}
         </div>
-        <div className="color-picker">
+        <div className="color-picker" role="radiogroup" aria-label="צבע שחקן 1">
           {PLAYER_COLORS.map((c) => (
-            <button key={c.id} type="button" className={`color-opt ${settings.playerOneColor === c.value ? 'selected' : ''}`} style={{ background: c.value }} onClick={() => onUpdate({ playerOneColor: c.value })} />
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={settings.playerOneColor === c.value}
+              aria-label={c.label}
+              className={`color-opt ${settings.playerOneColor === c.value ? 'selected' : ''}`}
+              style={{ background: c.value }}
+              onClick={() => onUpdate({ playerOneColor: c.value })}
+            />
           ))}
         </div>
         <label className="settings-field">
@@ -148,9 +166,18 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
             <button key={`2-${a}`} type="button" className={`avatar-opt ${settings.playerTwoAvatar === a ? 'selected' : ''}`} onClick={() => onUpdate({ playerTwoAvatar: a })}>{a}</button>
           ))}
         </div>
-        <div className="color-picker">
+        <div className="color-picker" role="radiogroup" aria-label="צבע שחקן 2">
           {PLAYER_COLORS.map((c) => (
-            <button key={`2-${c.id}`} type="button" className={`color-opt ${settings.playerTwoColor === c.value ? 'selected' : ''}`} style={{ background: c.value }} onClick={() => onUpdate({ playerTwoColor: c.value })} />
+            <button
+              key={`2-${c.id}`}
+              type="button"
+              role="radio"
+              aria-checked={settings.playerTwoColor === c.value}
+              aria-label={c.label}
+              className={`color-opt ${settings.playerTwoColor === c.value ? 'selected' : ''}`}
+              style={{ background: c.value }}
+              onClick={() => onUpdate({ playerTwoColor: c.value })}
+            />
           ))}
         </div>
       </div>
@@ -170,6 +197,26 @@ export function SettingsPanel({ settings, onUpdate, onResetScores, onBack }: Set
             <span key={a.id} className="achievement-badge">{a.emoji} {a.title}</span>
           ))}
         </div>
+      </div>
+
+      <div className="settings-group">
+        <span className="settings-label">פרטיות</span>
+        <p className="custom-content-panel__hint">
+          שמות, היסטוריה ותוכן מותאם נשמרים רק במכשיר זה. אין שליחה לשרת.
+        </p>
+        <button
+          type="button"
+          className="secondary-action pressable"
+          onClick={() => {
+            if (!window.confirm('למחוק את כל הנתונים המקומיים מהמכשיר?')) return;
+            clearAllLocalData();
+            setCleared(true);
+            window.setTimeout(() => window.location.reload(), 400);
+          }}
+        >
+          מחיקת כל הנתונים
+        </button>
+        {cleared && <p className="history-hint">הנתונים נמחקו — מרענן...</p>}
       </div>
 
       <div className="modal-actions settings-actions">

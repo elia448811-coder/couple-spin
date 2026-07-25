@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { QUESTION_GROUP_LABELS } from '../data/allQuestions';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { CoupleTask } from '../types/game';
 import { CATEGORY_LABELS } from '../types/game';
 import { CategoryIcon } from './CategoryIcon';
@@ -19,6 +20,13 @@ type TaskModalProps = {
   onMarkFunniest: () => void;
 };
 
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest('button, a, input, select, textarea, [role="button"], [contenteditable="true"]'),
+  );
+}
+
 export function TaskModal({
   task,
   currentPlayerName,
@@ -32,6 +40,8 @@ export function TaskModal({
   onMarkFunniest,
 }: TaskModalProps) {
   const [extrasOpen, setExtrasOpen] = useState(false);
+  const lockedRef = useRef(false);
+  const trapRef = useFocusTrap(true);
   const isQuestion = task.kind === 'question';
   const groupLabel =
     task.questionGroup && task.questionGroup in QUESTION_GROUP_LABELS
@@ -42,17 +52,43 @@ export function TaskModal({
   const isMature = task.category === 'spicy';
 
   useEffect(() => {
+    lockedRef.current = false;
+  }, [task.id]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onSkip();
-      if (e.key === 'Enter') onComplete();
+      if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (!lockedRef.current) {
+          lockedRef.current = true;
+          onSkip();
+        }
+        return;
+      }
+      // Enter רק כשלא על אלמנט אינטראקטיבי — מונע כפל פעולות
+      if (e.key === 'Enter' && !isInteractiveTarget(e.target)) {
+        e.preventDefault();
+        if (!lockedRef.current) {
+          lockedRef.current = true;
+          onComplete();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onComplete, onSkip]);
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
-      <div className={`task-modal task-modal--clean ${isQuestion ? 'task-modal--question' : ''}`}>
+    <div className="modal-backdrop" role="presentation">
+      <div
+        ref={trapRef}
+        className={`task-modal task-modal--clean ${isQuestion ? 'task-modal--question' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-modal-title"
+        tabIndex={-1}
+      >
         <p className="task-modal__who">
           {isQuestion
             ? isMature
@@ -121,6 +157,7 @@ export function TaskModal({
               type="button"
               className={`extra-btn ${isFunniest ? 'extra-btn--on' : ''} pressable`}
               onClick={onMarkFunniest}
+              aria-pressed={isFunniest}
             >
               {isFunniest ? '⭐ נבחר!' : isQuestion ? '⭐ שאלה מועדפת' : '😂 הכי מצחיקה'}
             </button>

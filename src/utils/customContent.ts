@@ -1,6 +1,16 @@
 import type { ContentKind, CoupleTask, TaskCategory, TaskLevel } from '../types/game';
 
 const CUSTOM_CONTENT_KEY = 'couple-spin-custom-content';
+const CATEGORIES = new Set<TaskCategory>([
+  'funny',
+  'romantic',
+  'challenge',
+  'calm',
+  'creative',
+  'movement',
+  'spicy',
+]);
+const LEVELS = new Set<TaskLevel>(['easy', 'normal', 'advanced']);
 
 export type CustomContentItem = {
   id: string;
@@ -26,19 +36,49 @@ function normalizeText(value: string, maxLen: number): string {
   return value.trim().slice(0, maxLen);
 }
 
+function sanitizeItem(raw: unknown): CustomContentItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const kind = o.kind === 'question' || o.kind === 'task' ? o.kind : null;
+  const category = CATEGORIES.has(o.category as TaskCategory) ? (o.category as TaskCategory) : null;
+  const level = LEVELS.has(o.level as TaskLevel) ? (o.level as TaskLevel) : null;
+  const title = typeof o.title === 'string' ? normalizeText(o.title, 120) : '';
+  const description = typeof o.description === 'string' ? normalizeText(o.description, 500) : '';
+  if (!kind || !category || !level || !title || !description) return null;
+  return {
+    id: typeof o.id === 'string' && o.id.length < 80 ? o.id : `custom-${crypto.randomUUID()}`,
+    kind,
+    title,
+    description,
+    category,
+    level,
+    questionGroup:
+      typeof o.questionGroup === 'string' && o.questionGroup.trim()
+        ? o.questionGroup.trim().slice(0, 40)
+        : undefined,
+    createdAt: typeof o.createdAt === 'string' ? o.createdAt : new Date().toISOString(),
+  };
+}
+
 export function loadCustomContent(): CustomContentItem[] {
   try {
     const raw = localStorage.getItem(CUSTOM_CONTENT_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as CustomContentItem[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(sanitizeItem).filter((x): x is CustomContentItem => Boolean(x));
   } catch {
     return [];
   }
 }
 
-function saveCustomContent(items: CustomContentItem[]): void {
-  localStorage.setItem(CUSTOM_CONTENT_KEY, JSON.stringify(items));
+function saveCustomContent(items: CustomContentItem[]): { ok: boolean } {
+  try {
+    localStorage.setItem(CUSTOM_CONTENT_KEY, JSON.stringify(items));
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export function customToCoupleTask(item: CustomContentItem): CoupleTask {
@@ -62,9 +102,10 @@ export function addCustomContent(input: NewCustomContentInput): CustomContentIte
   const title = normalizeText(input.title, 120);
   const description = normalizeText(input.description, 500);
   if (!title || !description) return null;
+  if (!CATEGORIES.has(input.category) || !LEVELS.has(input.level)) return null;
 
   const item: CustomContentItem = {
-    id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `custom-${crypto.randomUUID()}`,
     kind: input.kind,
     title,
     description,
@@ -74,8 +115,8 @@ export function addCustomContent(input: NewCustomContentInput): CustomContentIte
     createdAt: new Date().toISOString(),
   };
 
-  saveCustomContent([item, ...loadCustomContent()]);
-  return item;
+  const result = saveCustomContent([item, ...loadCustomContent()]);
+  return result.ok ? item : null;
 }
 
 export function removeCustomContent(id: string): void {

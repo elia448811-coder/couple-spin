@@ -455,6 +455,28 @@
   place-items: center;
 }
 
+.age-gate-note {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-particles,
+  .confetti-canvas {
+    display: none !important;
+  }
+
+  .animate-in,
+  .pressable,
+  .mini-robot,
+  .spinner-wheel {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 .game-end-confirm {
   margin-top: 12px;
   padding: 12px 14px;

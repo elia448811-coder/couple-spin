@@ -2,9 +2,11 @@ name = "couple-spin-auth"
 main = "index.js"
 compatibility_date = "2024-06-01"
 
-# כתובת האתר שמורשית לפנות ל-API (CORS)
+# Exact-match CORS origins (comma-separated also supported via ALLOWED_ORIGINS)
 [vars]
 ALLOWED_ORIGIN = "https://elia448811-coder.github.io"
+ALLOWED_ORIGINS = "https://elia448811-coder.github.io,https://couple-spin.vercel.app,https://double-game-black.vercel.app"
 
-# PASS_W — הגדר כ-Secret (לא בקוד!):
+# Secrets (not in git):
 #   npx wrangler secret put PASS_W
+#   npx wrangler secret put SESSION_SECRET

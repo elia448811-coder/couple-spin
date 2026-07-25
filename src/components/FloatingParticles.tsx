@@ -1,4 +1,12 @@
-export function FloatingParticles() {
+import { shouldReduceMotion } from '../utils/prefersReducedMotion';
+
+type FloatingParticlesProps = {
+  reduced?: boolean;
+};
+
+export function FloatingParticles({ reduced = false }: FloatingParticlesProps) {
+  if (shouldReduceMotion(reduced ? 'reduced' : 'full')) return null;
+
   const particles = Array.from({ length: 18 }, (_, i) => ({
     id: i,
     left: `${(i * 17 + 7) % 100}%`,

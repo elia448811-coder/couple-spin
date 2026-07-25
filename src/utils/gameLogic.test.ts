@@ -29,6 +29,8 @@ function baseState(overrides: Partial<GameState> = {}): GameState {
     roundTarget: 12,
     timeLimitSeconds: null,
     timeRemainingSeconds: null,
+    timeDeadlineMs: null,
+    finishEventId: null,
     stats: {
       totalCompleted: 0,
       totalSkipped: 0,

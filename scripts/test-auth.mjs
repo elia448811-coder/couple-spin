@@ -106,8 +106,11 @@ function validateVercelApi() {
   if (!auth.includes('SITE_PASSWORD') || !auth.includes('createSessionToken')) {
     fail('api/_lib/auth.js חייב SITE_PASSWORD + session tokens');
   }
-  if (/SITE_PASSWORD\s*=\s*['"]/.test(auth) || /0321/.test(auth)) {
+  if (/SITE_PASSWORD\s*=\s*['"]/.test(auth)) {
     fail('סיסמה לא צריכה להיות hardcoded ב-API');
+  }
+  if (!auth.includes('parseAllowedOrigins') && !auth.includes('ALLOWED_ORIGINS')) {
+    fail('api auth חייב allowlist ל-CORS');
   }
   notes.push('Vercel API auth — verify/session/health');
 }

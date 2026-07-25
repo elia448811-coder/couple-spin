@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 
 type ConfettiEffectProps = {
   active: boolean;
@@ -9,7 +10,7 @@ export function ConfettiEffect({ active, colors }: ConfettiEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || prefersReducedMotion()) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
