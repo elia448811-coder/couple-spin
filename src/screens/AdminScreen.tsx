@@ -856,7 +856,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
                 <label className="admin-field">
                   <span>סיסמה</span>
                   <input
-                    type="text"
+                    type="password"
                     value={newUser.password}
                     onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                     autoComplete="new-password"

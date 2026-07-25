@@ -1,5 +1,5 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v31_ADMIN_USERS_CATEGORIES
+// DOUBLE_GAME_RULES_v32_SECURITY_ACTIVE_ACCOUNT
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
@@ -14,6 +14,30 @@ service cloud.firestore {
           request.auth.token.email is string
           && request.auth.token.email.lower() == 'elia448811@gmail.com'
         )
+      );
+    }
+
+    // Real account (blocks anonymous Auth used only for bootstrap).
+    function isEmailSignedIn() {
+      return isAuth()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() > 3
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function callerUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Enforced server-side: profile must exist, not banned, not explicitly unapproved.
+    // Legacy docs without `approved` remain allowed (default true).
+    // Missing profile is NOT active — prevents Auth-only bypass of approval.
+    function isActiveAccount() {
+      return isAdmin() || (
+        isEmailSignedIn()
+        && callerUserDoc().exists
+        && callerUserDoc().data.get('banned', false) == false
+        && callerUserDoc().data.get('approved', true) != false
       );
     }
 
@@ -245,15 +269,32 @@ service cloud.firestore {
 
     function userCreateSafe() {
       return (!('banned' in request.resource.data) || request.resource.data.banned == false)
-        && (!('approved' in request.resource.data) || request.resource.data.approved == false);
+        && (!('approved' in request.resource.data) || request.resource.data.approved == false)
+        && (!('adminNote' in request.resource.data) || request.resource.data.adminNote == '');
     }
 
-    function userUpdateSafe() {
-      return (!('banned' in request.resource.data) || request.resource.data.banned == resource.data.get('banned', false))
-        && (
-          !('approved' in request.resource.data)
-          || request.resource.data.approved == resource.data.get('approved', true)
-        );
+    function userSelfFieldLocks() {
+      return unchanged('banned')
+        && unchanged('approved')
+        && unchanged('adminNote');
+    }
+
+    function userSelfUpdateKeysOk() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'displayName',
+          'partnerDisplayName',
+          'avatar',
+          'lastSeenMs',
+          'updatedAtMs',
+          'updatedAt',
+          'gamesPlayed',
+          'lastRoomId',
+          'username',
+          'schemaVersion',
+          'createdAt',
+          'createdAtMs'
+        ]);
     }
 
     // Public site settings (login page needs registration toggle before auth)
@@ -271,7 +312,7 @@ service cloud.firestore {
 
     // Content bank overrides (questions/tasks edited in admin)
     match /contentItems/{itemId} {
-      allow read: if isAuth();
+      allow read: if isActiveAccount();
       allow create, update: if isAdmin()
         && request.resource.data.updatedByUid == request.auth.uid;
       allow delete: if isAdmin();
@@ -279,8 +320,8 @@ service cloud.firestore {
 
     // Root user account document
     match /users/{userId} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuth() && (
+      allow read: if isEmailSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isEmailSignedIn() && (
         (
           request.auth.uid == userId
           && validUserProfile()
@@ -294,13 +335,14 @@ service cloud.firestore {
           && request.resource.data.displayName.size() <= 32
         )
       );
-      allow update: if isAuth()
+      allow update: if isEmailSignedIn()
         && unchanged('uid')
         && unchanged('createdAtMs')
         && (
           (
             request.auth.uid == userId
-            && userUpdateSafe()
+            && userSelfFieldLocks()
+            && userSelfUpdateKeysOk()
             && (
               validUserProfile()
               || request.resource.data.diff(resource.data).affectedKeys()
@@ -309,6 +351,12 @@ service cloud.firestore {
           )
           || (
             isAdmin()
+            // Sole admin account cannot be banned / unapproved via rules.
+            && !(userId == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'
+              && (
+                ('banned' in request.resource.data && request.resource.data.banned == true)
+                || ('approved' in request.resource.data && request.resource.data.approved == false)
+              ))
             && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly([
                 'banned',
@@ -325,40 +373,45 @@ service cloud.firestore {
     }
 
     match /users/{userId}/{document=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAuth() && request.auth.uid == userId;
+      allow read: if isEmailSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isEmailSignedIn() && request.auth.uid == userId;
     }
 
     match /rateLimits/{uid} {
-      allow read: if isAuth() && request.auth.uid == uid;
-      allow create: if isAuth() && request.auth.uid == uid && rateLimitCreateOk();
-      allow update: if isAuth() && request.auth.uid == uid && rateLimitUpdateOk();
+      allow read: if isActiveAccount() && request.auth.uid == uid;
+      allow create: if isActiveAccount() && request.auth.uid == uid && rateLimitCreateOk();
+      allow update: if isActiveAccount() && request.auth.uid == uid && rateLimitUpdateOk();
       allow delete: if false;
     }
 
     match /roomCodes/{code} {
-      allow read: if isAuth()
+      allow read: if isActiveAccount()
         && validDisplayCode(code)
         && resource.data.expiresAtMs > request.time.toMillis();
-      allow create: if isAuth()
+      allow create: if isActiveAccount()
         && validDisplayCode(code)
         && request.resource.data.roomId is string
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.expiresAtMs > request.time.toMillis()
         && request.resource.data.expiresAtMs
           <= request.time.toMillis() + 3 * 60 * 60 * 1000;
-      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+      allow delete: if isActiveAccount() && resource.data.hostUid == request.auth.uid;
     }
 
     match /rooms/{roomId} {
-      allow read: if isAuth()
+      // Members always; waiting empty rooms readable for join transaction after code lookup.
+      allow read: if isActiveAccount()
         && roomResourceActive()
         && (
           resource.data.hostUid == request.auth.uid
           || resource.data.partnerUid == request.auth.uid
+          || (
+            resource.data.status == 'waiting'
+            && resource.data.partnerUid == null
+          )
         );
 
-      allow create: if isAuth()
+      allow create: if isActiveAccount()
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.partnerUid == null
         && request.resource.data.version == 0
@@ -374,7 +427,7 @@ service cloud.firestore {
         && request.resource.data.hostReady == false
         && request.resource.data.partnerReady == false;
 
-      allow update: if isAuth() && roomResourceActive() && lockedRoomIdentity() && (
+      allow update: if isActiveAccount() && roomResourceActive() && lockedRoomIdentity() && (
         hostPresenceUpdate()
         || partnerPresenceUpdate()
         || hostVersionBump()
@@ -383,13 +436,13 @@ service cloud.firestore {
         || partnerLeaveUpdate()
       );
 
-      allow delete: if isAuth()
+      allow delete: if isActiveAccount()
         && resource.data.hostUid == request.auth.uid;
 
       match /events/{eventId} {
-        // Intentionally simple — complex get()/version chains were denying in production.
-        allow read: if isAuth();
-        allow create: if isAuth()
+        allow read: if isActiveAccount() && isRoomMember(roomId);
+        allow create: if isActiveAccount()
+          && isRoomMember(roomId)
           && request.resource.data.createdBy == request.auth.uid;
         allow update, delete: if false;
       }

@@ -1,7 +1,13 @@
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { getFirebaseAuth, getFirestoreDb, isFirebaseConfigured, readFirebaseWebConfig } from '../lib/firebase';
-import { assertAdmin, isSoleAdminIdentity } from './admin';
+import { assertAdmin, getSoleAdminUid, isSoleAdminIdentity, isSoleAdminUid } from './admin';
 import { isValidUsername, normalizeUsername, usernameToEmail } from './userAuth';
+
+function assertNotSoleAdminTarget(uid: string, action: string): void {
+  if (isSoleAdminUid(uid) || uid === getSoleAdminUid()) {
+    throw new Error(`לא ניתן לבצע ${action} על חשבון מנהל המערכת.`);
+  }
+}
 
 export type AdminUserRow = {
   uid: string;
@@ -54,6 +60,7 @@ export async function listAppUsers(max = 500): Promise<AdminUserRow[]> {
 
 export async function setUserBanned(uid: string, banned: boolean): Promise<void> {
   await assertAdmin();
+  if (banned) assertNotSoleAdminTarget(uid, 'חסימה');
   const db = await getFirestoreDb();
   if (!db) throw new Error('Firestore לא זמין');
   await updateDoc(doc(db, 'users', uid), {
@@ -64,6 +71,7 @@ export async function setUserBanned(uid: string, banned: boolean): Promise<void>
 
 export async function setUserApproved(uid: string, approved: boolean): Promise<void> {
   await assertAdmin();
+  if (!approved) assertNotSoleAdminTarget(uid, 'ביטול אישור');
   const db = await getFirestoreDb();
   if (!db) throw new Error('Firestore לא זמין');
   const patch: Record<string, unknown> = {

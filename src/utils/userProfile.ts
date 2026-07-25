@@ -1,7 +1,13 @@
-import { getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
+import { getFirebaseAuth, getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
 import { isSoleAdminIdentity } from './admin';
-import { ensureAnonAuth } from './cloudSync';
 import { loadSettings, saveSettings } from './storage';
+
+async function requireEmailUser() {
+  const auth = await getFirebaseAuth();
+  const user = auth?.currentUser;
+  if (!user || user.isAnonymous || !user.email) return null;
+  return user;
+}
 
 export const USER_PROFILE_SCHEMA = 1;
 export const MAX_DISPLAY_NAME_LEN = 32;
@@ -90,7 +96,7 @@ export async function ensureUserProfile(
   },
 ): Promise<UserProfile | null> {
   if (!isFirebaseConfigured()) return null;
-  const user = await ensureAnonAuth();
+  const user = await requireEmailUser();
   const db = await getFirestoreDb();
   if (!user || !db) return null;
 
@@ -123,9 +129,10 @@ export async function ensureUserProfile(
   if (!existing) {
     payload.createdAt = serverTimestamp();
     if (partial?.username?.trim()) payload.username = partial.username.trim().slice(0, 32);
-    // New self-registrations wait for admin approval; sole admin always approved.
+    // First profile create: non-admin always pending (Rules enforce approved!=true on self-create).
     payload.approved = isSoleAdminIdentity(user.uid, user.email);
     payload.banned = false;
+    payload.adminNote = '';
   }
   await setDoc(ref, payload, { merge: true });
 
@@ -152,7 +159,7 @@ export async function ensureUserProfile(
 
 export async function getUserProfile(): Promise<UserProfile | null> {
   if (!isFirebaseConfigured()) return getCachedUserProfile();
-  const user = await ensureAnonAuth();
+  const user = await requireEmailUser();
   const db = await getFirestoreDb();
   if (!user || !db) return getCachedUserProfile();
 
@@ -183,7 +190,7 @@ export async function updateUserProfile(
 
 export async function touchUserPresence(): Promise<void> {
   if (!isFirebaseConfigured()) return;
-  const user = await ensureAnonAuth();
+  const user = await requireEmailUser();
   const db = await getFirestoreDb();
   if (!user || !db) return;
   const { doc, serverTimestamp, setDoc } = await import('firebase/firestore');
@@ -202,7 +209,7 @@ export async function touchUserPresence(): Promise<void> {
 export async function incrementGamesPlayed(): Promise<void> {
   const profile = await getUserProfile();
   if (!profile) return;
-  const user = await ensureAnonAuth();
+  const user = await requireEmailUser();
   const db = await getFirestoreDb();
   if (!user || !db) return;
   const { doc, increment, serverTimestamp, setDoc } = await import('firebase/firestore');

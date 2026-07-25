@@ -71,6 +71,13 @@ function canUseRooms(): boolean {
   return isFirebaseConfigured();
 }
 
+/** Rooms require a real (non-anonymous) signed-in account. */
+async function ensureRoomAuth() {
+  const user = await ensureAnonAuth();
+  if (!user || user.isAnonymous || !user.email) return null;
+  return user;
+}
+
 function newRoomId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -321,7 +328,7 @@ export async function createCoupleRoom(hostName: string, eveningTitle = 'ערב 
   error?: string;
 }> {
   if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
-  const user = await ensureAnonAuth();
+  const user = await ensureRoomAuth();
   const db = await getFirestoreDb();
   if (!user || !db) return { ok: false, error: 'auth_failed' };
 
@@ -391,7 +398,7 @@ export async function joinCoupleRoom(
   const ipGuard = await assertJoinGuard();
   if (!ipGuard.ok) return { ok: false, error: ipGuard.error ?? 'join_rate_limited' };
 
-  const user = await ensureAnonAuth();
+  const user = await ensureRoomAuth();
   const db = await getFirestoreDb();
   if (!user || !db) return { ok: false, error: 'auth_failed' };
 
@@ -471,7 +478,7 @@ export async function leaveCoupleRoom(): Promise<void> {
     clearStoredRoom();
     return;
   }
-  const user = await ensureAnonAuth();
+  const user = await ensureRoomAuth();
   const db = await getFirestoreDb();
   if (!user || !db) {
     clearStoredRoom();
@@ -519,7 +526,7 @@ async function patchCoupleRoom(roomId: string, patch: Partial<CoupleRoom>): Prom
 }
 
 export async function setPlayerReady(roomId: string, ready: boolean): Promise<void> {
-  const user = await ensureAnonAuth();
+  const user = await ensureRoomAuth();
   const stored = readStored();
   if (!user || !stored) return;
   const now = Date.now();
@@ -546,7 +553,7 @@ export async function appendRoomEvent(
   payload: Record<string, unknown> = {},
 ): Promise<{ ok: boolean; version?: number; error?: string }> {
   if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
-  const user = await ensureAnonAuth();
+  const user = await ensureRoomAuth();
   const db = await getFirestoreDb();
   if (!user || !db) return { ok: false, error: 'auth_failed' };
 
