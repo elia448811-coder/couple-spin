@@ -177,8 +177,8 @@ export function QuickSetupScreen({
           </button>
           <div>
             <p className="flow-kicker">הכנת הערב</p>
-            <h1 className="flow-title setup-title">בואו נכין ערב מושלם</h1>
-            <p className="flow-desc setup-sub">בחרו סוג ערב, תוכן ומשך — ואז ממשיכים לקובייה</p>
+            <h1 className="flow-title setup-title">איזה ערב בא לכם?</h1>
+            <p className="flow-desc setup-sub">בחרו אווירה, סוג תוכן וקצב. תמיד תוכלו לשנות בהמשך.</p>
           </div>
         </header>
 
@@ -392,7 +392,7 @@ export function QuickSetupScreen({
 
         <div className="setup-footer">
           <button type="button" className="cta-button pressable" onClick={handleContinue}>
-            המשך להכנת המשחק
+            הכל מוכן — ממשיכים
           </button>
           <p className="setup-summary">
             {MODE_LABELS[mode]} · {CONTENT_SHORT[contentMode]} ·{' '}

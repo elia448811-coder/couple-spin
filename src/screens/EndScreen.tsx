@@ -3,6 +3,7 @@ import { ConfettiEffect } from '../components/ConfettiEffect';
 import { StatsSummary } from '../components/GameHeader';
 import { ACHIEVEMENTS, END_PHRASES } from '../types/game';
 import type { AppSettings, GameState } from '../types/game';
+import { polishPrompt } from '../utils/polishPrompt';
 import { buildEndShareData, generateShareImage, shareGameResult } from '../utils/share';
 import { buildEveningRecap } from '../utils/surpriseEvening';
 import { getLatestEveningRating, saveEveningRating } from '../utils/taskFeedback';
@@ -106,7 +107,7 @@ export function EndScreen({ game, settings, onNewGame, onPlayAgain, onHome }: En
         {game.stats.funniestTaskTitle && (
           <p className="funniest-task">
             {game.contentMode === 'questions' ? '⭐ השאלה מועדפת:' : '😂 המשימה הכי מצחיקה:'}{' '}
-            {game.stats.funniestTaskTitle}
+            {polishPrompt(game.stats.funniestTaskTitle)}
           </p>
         )}
 

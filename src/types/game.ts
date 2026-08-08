@@ -243,7 +243,7 @@ export const MODE_DESCRIPTIONS: Record<GameMode, string> = {
   challenge: 'משימות קצת יותר מאתגרות אבל עדיין קלילות',
   calm: 'משימות שקטות, נעימות ואווירה טובה',
   mixed: 'שילוב של כל הסוגים',
-  spicy: 'תוכן נועל ופלרטטני לזוגות בוגרים — עם אישור גיל',
+  spicy: 'תוכן נועז ופלרטטני לזוגות בוגרים — עם אישור גיל',
 };
 
 export const LEVEL_LABELS: Record<TaskLevel, string> = {

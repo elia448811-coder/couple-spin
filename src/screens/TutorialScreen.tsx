@@ -4,9 +4,9 @@ type TutorialScreenProps = {
 };
 
 const STEPS = [
-  { emoji: '🎡', title: 'סובבו את הגלגל', text: 'לחצו על "סובב" וקבלו קטגוריה אקראית.' },
-  { emoji: '💪', title: 'בצעו או דברו', text: 'משימה? בצעו. שאלה? שתפו בכנות. תמיד אפשר לדלג!' },
-  { emoji: '🏆', title: 'צברו נקודות', text: 'כל משימה שבוצעה = נקודה. מי מגיע ליעד — מנצח!' },
+  { emoji: '🎡', title: 'מסובבים', text: 'הגלגל בוחר את הרגע הבא: שאלה, משימה או הפתעה.' },
+  { emoji: '💬', title: 'משתפים או מבצעים', text: 'עונים בכנות, עושים יחד — ורק במה שמרגיש לכם נכון.' },
+  { emoji: '✨', title: 'צוברים רגעים', text: 'כל סיבוב מקרב אתכם ליעד, אבל החיבור הוא הניצחון האמיתי.' },
 ];
 
 export function TutorialScreen({ onStart, onBack }: TutorialScreenProps) {
@@ -38,7 +38,7 @@ export function TutorialScreen({ onStart, onBack }: TutorialScreenProps) {
           ))}
         </div>
 
-        <p className="level-warning">אין חובה — משימות ושאלות, תמיד אפשר לדלג!</p>
+        <p className="level-warning">בלי לחץ ובלי חובה — תמיד אפשר לדלג, להחליף או לעצור.</p>
 
         <button type="button" className="spin-button pressable" onClick={onStart}>
           הבנו — בואו נשחק!

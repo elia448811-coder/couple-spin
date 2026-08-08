@@ -1,5 +1,6 @@
 import { CONTENT_MODE_LABELS, MODE_LABELS } from '../types/game';
 import type { RobotContext, RobotReply } from '../types/robot';
+import { polishPrompt } from './polishPrompt';
 
 function p1(ctx: RobotContext) {
   return ctx.playerOneName;
@@ -186,7 +187,7 @@ export function judgeWhoIsFunnier(ctx: RobotContext): RobotReply {
     const other = fav === 0 ? p2(ctx) : p1(ctx);
     return {
       mood: 'excited',
-      text: `😂 שיפוט הומור:\n\nהמשימה הכי מצחיקה: "${ctx.stats.funniestTaskTitle}"\n\n**${winner}** — לדעתי יותר מצחיק/ה הערב (ב-53% ביטחון סטטיסטי).\n**${other}** — גם את/ה היית מעולה, אל תקפא/י 😄`,
+      text: `😂 שיפוט הומור:\n\nהמשימה הכי מצחיקה: "${polishPrompt(ctx.stats.funniestTaskTitle)}"\n\n**${winner}** — לדעתי יותר מצחיק/ה הערב (ב-53% ביטחון סטטיסטי).\n**${other}** — גם את/ה היית מעולה, אל תקפא/י 😄`,
       suggestions: ['מי מנצח?', 'ציון לערב'],
     };
   }

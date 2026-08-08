@@ -18,9 +18,14 @@ type GateState = 'loading' | 'login' | 'banned' | 'pending' | 'ok';
  * New registrations stay locked until an admin approves them.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
-  const [gate, setGate] = useState<GateState>('loading');
+  const previewMode = import.meta.env.DEV && import.meta.env.VITE_PREVIEW_MODE === 'true';
+  const [gate, setGate] = useState<GateState>(previewMode ? 'ok' : 'loading');
 
   const evaluate = useCallback(async () => {
+    if (previewMode) {
+      setGate('ok');
+      return;
+    }
     if (!isFirebaseConfigured()) {
       setGate('login');
       return;
@@ -46,9 +51,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     setGate('ok');
     void fetchCategories();
-  }, []);
+  }, [previewMode]);
 
   useEffect(() => {
+    if (previewMode) return;
     if (!isFirebaseConfigured()) {
       setGate('login');
       return;
@@ -66,13 +72,17 @@ export function AuthGuard({ children }: AuthGuardProps) {
       unsub();
       contentUnsub();
     };
-  }, [evaluate]);
+  }, [evaluate, previewMode]);
 
   useEffect(() => {
-    if (gate !== 'ok') return;
+    if (previewMode || gate !== 'ok') return;
     const unsub = subscribeContentOverrides();
     return () => unsub();
-  }, [gate]);
+  }, [gate, previewMode]);
+
+  if (previewMode) {
+    return <>{children}</>;
+  }
 
   if (gate === 'loading') {
     return (

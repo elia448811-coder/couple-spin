@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { InstallPWABanner } from '../components/InstallPWABanner';
 import { BackgroundGlow } from '../components/BackgroundGlow';
 import { FloatingParticles } from '../components/FloatingParticles';
+import { LogoutButton } from '../components/LogoutButton';
 import { MiniRobot } from '../components/MiniRobot';
 import { SyncStatusBanner } from '../components/SyncStatusBanner';
 import { useToast } from '../contexts/ToastContext';
@@ -24,6 +25,7 @@ import '../styles/responsive.css';
 import '../styles/friendly.css';
 import '../styles/hub.css';
 import '../styles/premium.css';
+import '../styles/cinematic.css';
 
 const go = (navigate: (s: Screen) => void, screen: Screen) => () => navigate(screen);
 
@@ -51,6 +53,7 @@ function ScreenFallback() {
 }
 
 function AppContent() {
+  const previewMode = import.meta.env.DEV && import.meta.env.VITE_PREVIEW_MODE === 'true';
   const {
     settings,
     game,
@@ -108,6 +111,7 @@ function AppContent() {
   }, [pendingJoinCode]);
 
   useEffect(() => {
+    if (previewMode) return;
     let cancelled = false;
     let intervalId: number | undefined;
     void (async () => {
@@ -124,7 +128,7 @@ function AppContent() {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, []);
+  }, [previewMode]);
 
   useEffect(() => {
     if (onboardingCheckedRef.current) return;
@@ -213,14 +217,17 @@ function AppContent() {
 
   return (
     <main className={`app-shell ${isGame ? 'app-shell--focus' : ''}`} dir="rtl">
+      {!previewMode && <LogoutButton />}
       {!isGame && <BackgroundGlow />}
       {!isGame && <FloatingParticles reduced={settings.animationStyle === 'reduced'} />}
       <InstallPWABanner />
-      <SyncStatusBanner
-        coupleRoom={couple.room}
-        coupleRole={couple.role}
-        partnerLive={partnerLive}
-      />
+      {!previewMode && (
+        <SyncStatusBanner
+          coupleRoom={couple.room}
+          coupleRole={couple.role}
+          partnerLive={partnerLive}
+        />
+      )}
 
       <Suspense fallback={<ScreenFallback />}>
         {game.screen === 'tutorial' && (

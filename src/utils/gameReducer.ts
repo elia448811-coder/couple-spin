@@ -3,6 +3,7 @@ import { getDefaultRoundTarget, getTimeLimitForFormat } from '../types/game';
 import { checkEndConditions } from './gameEnd';
 import { buildFinishedGame } from './gameFinish';
 import type { GameEffect, GameEvent } from './gameEvents';
+import { polishPrompt } from './polishPrompt';
 import { isTaskHidden } from './privacy';
 
 function emptyStats(): GameState['stats'] {
@@ -314,7 +315,7 @@ export function gameReducer(state: GameState, event: GameEvent): ReduceResult {
           stats: {
             ...state.stats,
             funniestTaskId: event.task.id,
-            funniestTaskTitle: event.task.description,
+            funniestTaskTitle: polishPrompt(event.task.description),
           },
         },
         effects: [],

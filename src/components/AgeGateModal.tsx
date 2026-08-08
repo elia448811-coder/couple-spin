@@ -25,7 +25,7 @@ export function AgeGateModal({ open, onConfirm, onCancel }: AgeGateModalProps) {
           🔥 מצב בוגרים
         </h2>
         <p className="flow-desc age-gate-desc">
-          מצב זה מיועד לזוגות בני 18 ומעלה. התוכן נועל, פלרטטני ואינטימי — בלי תוכן מפורש.
+          מצב זה מיועד לזוגות בני 18 ומעלה. התוכן נועז, פלרטטני ואינטימי — בלי תוכן מפורש.
           <br />
           <strong>משחקים רק במה שנוח לשניכם. תמיד אפשר לדלג.</strong>
           <br />

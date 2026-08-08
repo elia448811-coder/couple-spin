@@ -103,9 +103,9 @@ export function WelcomeScreen({
         <header className="hub-hero animate-in">
           <div className="hub-hero__glow" aria-hidden />
           <p className="hub-hero__badge">Couple Spin</p>
-          <h1 className="hub-hero__title">הערב שלכם מתחיל כאן</h1>
+          <h1 className="hub-hero__title">ערב אחד. רק שניכם.</h1>
           <p className="hub-hero__tag">
-            שלום {playerOneName} ו{playerTwoName} — ערב זוגי, גלגל הפתעות, וחיבור אמיתי
+            {playerOneName} ו{playerTwoName}, מוכנים לצחוק, להפתיע ולהתקרב קצת יותר?
           </p>
           <div className="hub-avatars" aria-hidden>
             <span className="hub-avatar">💜</span>
@@ -140,8 +140,8 @@ export function WelcomeScreen({
             >
               <span className="hub-cta__icon">🎡</span>
               <span>
-                <strong>משחק מהיר</strong>
-                <small>בחירת מצב, תוכן ומשך</small>
+                <strong>בואו נתחיל</strong>
+                <small>אתם בוחרים את האווירה והקצב</small>
               </span>
             </button>
             <button
@@ -153,8 +153,8 @@ export function WelcomeScreen({
             >
               <span className="hub-cta__icon">🎁</span>
               <span>
-                <strong>ערב הפתעה</strong>
-                <small>המערכת בוחרת בשבילכם</small>
+                <strong>תפתיעו אותנו</strong>
+                <small>אנחנו נרכיב לכם ערב בלחיצה אחת</small>
               </span>
             </button>
             <div className="hub-meta-row">
@@ -219,7 +219,7 @@ export function WelcomeScreen({
 
         <footer className="hub-footer">
           <p>
-            {total} פריטי תוכן · חדר מאובטח · חוויה זוגית אחת
+            {total} רגעים אפשריים · תמיד אפשר לדלג · הקצב הוא שלכם
           </p>
         </footer>
       </div>

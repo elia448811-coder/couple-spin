@@ -1,7 +1,7 @@
 import type { CoupleQuestionTask } from './allQuestions';
 import type { CoupleTask } from '../types/game';
 
-/** תוכן 18+ — נועל, פלרטטני ואינטימי. לא מפורש. */
+/** תוכן 18+ — נועז, פלרטטני ואינטימי. לא מפורש. */
 export const matureTasks: CoupleTask[] = [
   { id: 'spicy-001', title: 'נשיקה ארוכה', description: 'תנו נשיקה של 10 שניות — בקצב שלכם.', category: 'spicy', level: 'normal', durationSeconds: 10, isCoupleTask: true },
   { id: 'spicy-002', title: 'לחישה', description: 'לחשו אחד לשני משפט אחד שמחמם את הלב.', category: 'spicy', level: 'easy', isCoupleTask: true },

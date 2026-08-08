@@ -162,9 +162,9 @@ export function PartnerConnectPanel({
   return (
     <div className="hub-card">
       <p className="hub-card__kicker">חדר זוגי</p>
-      <h2 className="hub-card__title">חברו שני טלפונים לאותו ערב</h2>
+      <h2 className="hub-card__title">משחקים יחד, כל אחד מהטלפון שלו</h2>
       <p className="hub-card__text">
-        חדר עם קוד בן 8 ספרות, תוקף של שעתיים, וסנכרון דרך אירועים קטנים — לא snapshot ענק.
+        יוצרים חדר, שולחים קוד לבן או בת הזוג — ונכנסים לאותו ערב בזמן אמת.
       </p>
 
       {errorInfo && (
@@ -183,7 +183,7 @@ export function PartnerConnectPanel({
             onClick={() => onCreate(defaultHostName)}
             disabled={busy}
           >
-            צור חדר חדש
+            אני יוצר/ת חדר
           </button>
           <button
             type="button"
@@ -191,7 +191,7 @@ export function PartnerConnectPanel({
             onClick={() => setMode('join')}
             disabled={busy}
           >
-            הצטרף עם קוד
+            יש לי קוד
           </button>
         </div>
       )}

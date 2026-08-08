@@ -1,0 +1,146 @@
+/* Cinematic visual layer — intentionally last in the cascade. */
+:root {
+  --cinema-ink: #090512;
+  --cinema-panel: rgba(24, 13, 43, 0.78);
+  --cinema-line: rgba(255, 255, 255, 0.11);
+  --cinema-pink: #ff6f9f;
+  --cinema-violet: #a984ff;
+  --cinema-cream: #fff8f2;
+}
+
+html { background: var(--cinema-ink); }
+
+body {
+  background:
+    linear-gradient(180deg, rgba(8, 4, 18, .38), rgba(8, 4, 18, .78)),
+    url('../assets/couple-night-bg.png') center / cover fixed no-repeat;
+  color: var(--cinema-cream);
+}
+
+.app-shell {
+  isolation: isolate;
+  background: transparent;
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 20%, transparent 0 20%, rgba(7, 3, 16, .38) 72%);
+}
+
+.background-glow,
+.floating-particles { opacity: .38; }
+
+.hub-layout { max-width: 1080px; }
+
+.hub-hero {
+  padding-block: clamp(1.5rem, 5vw, 4rem) 1.5rem;
+}
+
+.hub-hero__badge,
+.flow-kicker,
+.eyebrow {
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(255, 236, 244, .72);
+}
+
+.hub-hero__title,
+.flow-title,
+.page-heading {
+  color: var(--cinema-cream);
+  text-wrap: balance;
+  text-shadow: 0 12px 42px rgba(0, 0, 0, .45);
+}
+
+.hub-hero__title {
+  font-size: clamp(2.7rem, 7vw, 5.8rem);
+  line-height: .98;
+  max-width: 12ch;
+  margin-inline: auto;
+}
+
+.hub-hero__tag {
+  max-width: 46rem;
+  margin-inline: auto;
+  font-size: clamp(1rem, 2.1vw, 1.28rem);
+  color: rgba(255, 248, 244, .82);
+}
+
+.hub-card,
+.flow-card,
+.game-card,
+.task-modal,
+.site-gate__card {
+  background: linear-gradient(145deg, rgba(37, 20, 62, .88), var(--cinema-panel));
+  border: 1px solid var(--cinema-line);
+  box-shadow: 0 28px 80px rgba(3, 1, 10, .48), inset 0 1px rgba(255,255,255,.05);
+  backdrop-filter: blur(22px) saturate(125%);
+}
+
+.hub-card { border-radius: 28px; }
+
+.hub-cta,
+.cta-button,
+.spin-button,
+.primary-action {
+  color: #180817;
+  background: linear-gradient(135deg, #ffd2df 0%, var(--cinema-pink) 48%, #ff936f 100%);
+  border: 0;
+  box-shadow: 0 14px 34px rgba(255, 91, 145, .28), inset 0 1px rgba(255,255,255,.6);
+}
+
+.hub-cta:hover,
+.cta-button:hover,
+.spin-button:hover,
+.primary-action:hover { filter: brightness(1.06); transform: translateY(-2px); }
+
+.hub-cta--surprise {
+  color: var(--cinema-cream);
+  background: linear-gradient(135deg, rgba(130, 91, 210, .88), rgba(82, 48, 145, .88));
+  border: 1px solid rgba(206, 181, 255, .25);
+  box-shadow: 0 14px 34px rgba(95, 55, 175, .22);
+}
+
+.option-card--on,
+.choice-chip[aria-pressed='true'],
+.target-chip--on {
+  border-color: rgba(255, 127, 170, .78);
+  background: linear-gradient(145deg, rgba(255, 103, 154, .2), rgba(139, 94, 226, .18));
+  box-shadow: 0 0 0 3px rgba(255, 100, 153, .1), 0 16px 36px rgba(8, 3, 20, .2);
+}
+
+.feature-tag,
+.hub-meta-row,
+.category-badge,
+.end-winner-pill {
+  background: rgba(255, 255, 255, .065);
+  border-color: rgba(255, 255, 255, .1);
+}
+
+.task-modal__text {
+  font-size: clamp(1.65rem, 4.5vw, 2.8rem);
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+button, input, select, textarea { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(255, 205, 224, .92);
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  body { background-attachment: scroll; background-position: 58% center; }
+  .hub-hero__title { font-size: clamp(2.65rem, 14vw, 4.1rem); }
+  .hub-card, .flow-card, .game-card { border-radius: 22px; }
+  .feature-tags { gap: .45rem; }
+  .feature-tag { font-size: .76rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
