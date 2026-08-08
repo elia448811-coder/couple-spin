@@ -11,7 +11,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-001',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "בקרבה מכבדת, מה גורם לך להרגיש קרוב/ה אליי בצורה נעימה ומיוחדת?",
+    description: "בקרבה מכבדת וחמה, מה הכי גורם לך להרגיש קרוב/ה אליי בצורה שנשארת איתך גם אחרי?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -21,7 +21,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-002',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "באווירה רומנטית ונעימה, איזו מחווה רומנטית קטנה היית רוצה לקבל ממני יותר?",
+    description: "באווירה רומנטית, איזו מחווה קטנה אבל חושנית היית רוצה לקבל ממני יותר?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -31,7 +31,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-003',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "עם כבוד לגבולות, מתי את/ה מרגיש/ה הכי קרוב/ה אליי בלב?",
+    description: "עם כבוד מלא לגבולות, מתי את/ה מרגיש/ה הכי קרוב/ה אליי בלב ובגוף?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -41,7 +41,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-004',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "ברגע פרטי ושקט, איזה רגע פרטי ושקט היית רוצה שיהיה לנו יותר?",
+    description: "ברגע פרטי ושקט, איזה רגע אינטימי ושקט היית רוצה שיהיה לנו יותר?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -51,7 +51,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-005',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "במקום בטוח, מה גורם לך להרגיש אהוב/ה, רצוי/ה ובטוח/ה איתי?",
+    description: "במקום בטוח וחם, מה גורם לך להרגיש אהוב/ה, רצוי/ה, מושך/ת ובטוח/ה איתי?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -61,7 +61,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-006',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "בלי לחץ, איזה רגע זוגי שלנו הרגיש לך חם, נעים ומיוחד?",
+    description: "בלי לחץ, איזה רגע זוגי שלנו הרגיש לך הכי חם, נעים ומלא תשוקה?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -71,7 +71,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-007',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "כשהלב פתוח, איזה דבר בי גורם לך להרגיש חיבה וקרבה?",
+    description: "כשהלב פתוח, איזה דבר בי גורם לך להרגיש חיבה, משיכה וקרבה עמוקה?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -81,7 +81,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-008',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "שאלה של קרבה: איזה משפט או מחווה עוזרים לך להיכנס לאווירה רומנטית?",
+    description: "שאלה של קרבה: איזה משפט, מבט או מגע עוזרים לך להיכנס לאווירה רומנטית וחושנית?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -91,7 +91,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-009',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "ברכות ובכבוד, איך נראה בעיניך ערב רומנטי שמתחיל נכון?",
+    description: "ברכות ובכבוד, איך נראה בעיניך ערב רומנטי שמתחיל נכון וממשיך בחמימות?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -101,7 +101,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-010',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "בינינו בעדינות, מה חשוב לך שנכבד כשאנחנו קרובים?",
+    description: "בינינו בעדינות, מה חשוב לך שנכבד כשאנחנו קרובים פיזית ורגשית?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -111,7 +111,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-011',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "בקרבה מכבדת, איזה משהו חדש, נעים ומכבד היית רוצה שננסה יחד?",
+    description: "בקרבה מכבדת, איזה משהו חדש, נעים וחושני היית רוצה שננסה יחד?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -121,7 +121,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-012',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "באווירה רומנטית ונעימה, איזו פינה בבית מרגישה לך הכי שלנו?",
+    description: "באווירה רומנטית, איזו פינה בבית מרגישה לך הכי \"שלנו\" ואינטימית?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -131,7 +131,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-013',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "עם כבוד לגבולות, אחרי יום ארוך, איזה סוג של קרבה עושה לך טוב?",
+    description: "עם כבוד לגבולות, אחרי יום ארוך, איזה סוג של קרבה גופנית עושה לך הכי טוב?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -141,7 +141,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-014',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "ברגע פרטי ושקט, מה עוזר לך להרגיש בטוח/ה יותר בקרבה זוגית?",
+    description: "ברגע פרטי, מה עוזר לך להרגיש בטוח/ה יותר כשאנחנו מתקרבים?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -151,7 +151,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-015',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "במקום בטוח, איזה שיר הכי מתאים לאווירה שלנו עכשיו?",
+    description: "במקום בטוח, איזה שיר הכי מתאים לאווירה רומנטית וחמה שלנו עכשיו?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -161,7 +161,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-016',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "בלי לחץ, מה היית רוצה שאעשה בשבילך הערב כדי שתרגיש/י אהוב/ה?",
+    description: "בלי לחץ, מה היית רוצה שאעשה בשבילך הערב כדי שתרגיש/י אהוב/ה ומבוקש/ת?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -171,7 +171,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-017',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "כשהלב פתוח, מתי בפעם האחרונה הרגשת באמת רצוי/ה ומוערך/ת?",
+    description: "כשהלב פתוח, מתי בפעם האחרונה הרגשת באמת רצוי/ה, מוערך/ת ומלא/ת משיכה?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -181,7 +181,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-018',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "שאלה של קרבה: איזה גבול אישי חשוב לך שנכבד תמיד?",
+    description: "שאלה של קרבה: איזה גבול אישי חשוב לך שנכבד תמיד, גם ברגעים הכי חמים?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -191,7 +191,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-019',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "ברכות ובכבוד, איך את/ה מביע/ה רצון לקרבה בלי הרבה מילים?",
+    description: "ברכות ובכבוד, איך את/ה מביע/ה רצון לקרבה ולמגע בלי הרבה מילים?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',
@@ -201,7 +201,7 @@ export const intimacyQuestions: IntimacyQuestionTask[] = [
   {
     id: 'intim-020',
     title: "קרבה זוגית נקייה ומכבדת",
-    description: "בינינו בעדינות, מה היית רוצה שנזכור מהרגע הזה?",
+    description: "בינינו בעדינות, מה היית רוצה שנזכור מהרגע הזה — גם מהחום וגם מהרכות?",
     kind: 'question',
     questionGroup: 'intimacy',
     category: 'romantic',

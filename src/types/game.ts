@@ -223,8 +223,8 @@ export const CONTENT_MODE_LABELS: Record<ContentMode, string> = {
 };
 
 export const CONTENT_MODE_DESCRIPTIONS: Record<ContentMode, string> = {
-  tasks: '180 משימות כיפיות לביצוע',
-  questions: '400+ שאלות חווייתיות',
+  tasks: '280 משימות כיפיות לביצוע (כולל 18+)',
+  questions: '432 שאלות חווייתיות (כולל 18+)',
   mixed: 'שילוב אקראי של משימות ושאלות',
 };
 

@@ -14,10 +14,10 @@ describe('data integrity', () => {
     expect(allQuestions.length).toBe(292);
     expect(meet100Questions.length).toBe(100);
     expect(intimacyQuestions.length).toBe(20);
-    expect(matureTasks.length).toBe(30);
+    expect(matureTasks.length).toBe(130);
     expect(matureQuestions.length).toBe(20);
-    expect(allContent.length).toBe(612);
-    expect(getContentBankStats().total).toBe(612);
+    expect(allContent.length).toBe(712);
+    expect(getContentBankStats().total).toBe(712);
   });
 
   it('has unique ids across all content', () => {
@@ -78,11 +78,11 @@ describe('data integrity', () => {
   });
 
   it('bank stats match content modes', () => {
-    expect(getFullBankStats('tasks').total).toBe(180);
+    expect(getFullBankStats('tasks').total).toBe(280);
     expect(getFullBankStats('questions').total).toBe(432);
-    expect(getFullBankStats('mixed').total).toBe(612);
-    expect(getFullBankStats('mixed', 'spicy').total).toBe(50);
-    expect(getFullBankStats('tasks', 'spicy').total).toBe(30);
+    expect(getFullBankStats('mixed').total).toBe(712);
+    expect(getFullBankStats('mixed', 'spicy').total).toBe(150);
+    expect(getFullBankStats('tasks', 'spicy').total).toBe(130);
     expect(getFullBankStats('questions', 'spicy').total).toBe(20);
   });
 

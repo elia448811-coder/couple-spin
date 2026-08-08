@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { builtInContent, getContentBankStats } from '../data/allContent';
+import { builtInContent, getAllContent, getContentBankStats } from '../data/allContent';
 import { getSoleAdminUid, isCurrentUserAdmin, SOLE_ADMIN_EMAIL } from '../utils/admin';
 import {
   asTaskCategory,
@@ -26,7 +26,7 @@ import {
   upsertContentItem,
   type ContentItemDoc,
 } from '../utils/contentOverrides';
-import { downloadQuestionsFile } from '../utils/exportQuestionsFile';
+import { countExportItems, downloadQuestionsFile } from '../utils/exportQuestionsFile';
 import { fetchSiteConfig, saveSiteConfig, type SiteConfig } from '../utils/siteConfig';
 import type { ContentKind, TaskLevel } from '../types/game';
 
@@ -83,6 +83,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
   const [catDraft, setCatDraft] = useState({ id: '', label: '', icon: '✦' });
   const [editingCat, setEditingCat] = useState<CategoryDef | null>(null);
   const [newUser, setNewUser] = useState({ username: '', password: '', displayName: '', approved: true });
+  const [exportSelected, setExportSelected] = useState<string[] | null>(null);
 
   const reload = useCallback(async () => {
     const isAdmin = await isCurrentUserAdmin();
@@ -182,6 +183,48 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
   const bannedCount = users.filter((u) => u.banned).length;
   const pendingCount = users.filter((u) => u.pending).length;
   const questionCount = catalog.filter((r) => (r.effective.kind ?? 'task') === 'question').length;
+
+  const exportCategoryOptions = useMemo(() => {
+    const counts = new Map<string, { questions: number; tasks: number }>();
+    for (const item of getAllContent()) {
+      const cur = counts.get(item.category) ?? { questions: 0, tasks: 0 };
+      if (item.kind === 'question') cur.questions += 1;
+      else cur.tasks += 1;
+      counts.set(item.category, cur);
+    }
+    const ids = sortCategoryIds(
+      new Set([...categories.map((c) => c.id), ...counts.keys()]),
+    );
+    return ids.map((id) => ({
+      id,
+      label: getCategoryLabel(id),
+      icon: getCategoryIcon(id),
+      questions: counts.get(id)?.questions ?? 0,
+      tasks: counts.get(id)?.tasks ?? 0,
+    }));
+  }, [categories, overrides]);
+
+  useEffect(() => {
+    if (exportSelected !== null || !exportCategoryOptions.length) return;
+    setExportSelected(exportCategoryOptions.map((c) => c.id));
+  }, [exportCategoryOptions, exportSelected]);
+
+  const selectedExportCategories = exportSelected ?? exportCategoryOptions.map((c) => c.id);
+  const exportPreview = useMemo(
+    () => countExportItems({ categories: selectedExportCategories }),
+    [selectedExportCategories],
+  );
+  const exportPreviewWithTasks = useMemo(
+    () => countExportItems({ categories: selectedExportCategories, includeTasks: true }),
+    [selectedExportCategories],
+  );
+
+  const toggleExportCategory = (id: string) => {
+    setExportSelected((prev) => {
+      const base = prev ?? exportCategoryOptions.map((c) => c.id);
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
+  };
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
@@ -1006,33 +1049,81 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
         {tab === 'export' && (
           <div className="admin-panel">
             <div className="admin-card">
+              <h2>בחירת קטגוריות לייצוא</h2>
+              <p className="admin-muted">
+                סמנו אילו קטגוריות לכלול בקובץ. אפשר לייצא רק רומנטי, או הכל חוץ מקטגוריה מסוימת.
+              </p>
+              <div className="admin-actions-row">
+                <button
+                  type="button"
+                  className="secondary-action pressable"
+                  onClick={() => setExportSelected(exportCategoryOptions.map((c) => c.id))}
+                >
+                  סמן הכל
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action pressable"
+                  onClick={() => setExportSelected([])}
+                >
+                  נקה הכל
+                </button>
+              </div>
+              <div className="admin-chip-row admin-export-cats" role="group" aria-label="קטגוריות לייצוא">
+                {exportCategoryOptions.map((c) => {
+                  const on = selectedExportCategories.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`admin-chip ${on ? 'is-active' : ''}`}
+                      aria-pressed={on}
+                      onClick={() => toggleExportCategory(c.id)}
+                    >
+                      <span aria-hidden>{c.icon}</span> {c.label}
+                      <span className="admin-export-cat-count">
+                        {c.questions}ש / {c.tasks}מ
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="admin-muted">
+                נבחרו {selectedExportCategories.length} מתוך {exportCategoryOptions.length} · שאלות לייצוא:{' '}
+                {exportPreview.questions}
+                {selectedExportCategories.length === 0 ? ' — בחרו לפחות קטגוריה אחת' : ''}
+              </p>
+            </div>
+            <div className="admin-card">
               <h2>הורדת קובץ שאלות מרוכז</h2>
               <p className="admin-muted">
-                מייצא את מאגר השאלות הפעיל (כולל עריכות, בלי מוסתרים) לקובץ טקסט.
+                מייצא את מאגר השאלות הפעיל לפי הקטגוריות שנבחרו (כולל עריכות, בלי מוסתרים).
               </p>
               <div className="admin-actions-row">
                 <button
                   type="button"
                   className="primary-action pressable"
+                  disabled={!selectedExportCategories.length || exportPreview.questions === 0}
                   onClick={() => {
-                    const n = downloadQuestionsFile();
+                    const n = downloadQuestionsFile({ categories: selectedExportCategories });
                     flash(`קובץ שאלות הורד (${n} שורות).`);
                   }}
                 >
-                  הורדת שאלות בלבד
+                  הורדת שאלות בלבד ({exportPreview.questions})
                 </button>
                 <button
                   type="button"
                   className="secondary-action pressable"
+                  disabled={!selectedExportCategories.length || exportPreviewWithTasks.total === 0}
                   onClick={() => {
                     const n = downloadQuestionsFile({
                       includeTasks: true,
-                      filename: `שאלות-ומשימות-${new Date().toISOString().slice(0, 10)}.txt`,
+                      categories: selectedExportCategories,
                     });
                     flash(`קובץ מלא הורד (${n} שורות).`);
                   }}
                 >
-                  הורדת שאלות + משימות
+                  הורדת שאלות + משימות ({exportPreviewWithTasks.total})
                 </button>
               </div>
             </div>
@@ -1042,6 +1133,7 @@ export function AdminScreen({ onBack }: AdminScreenProps) {
                 <li>שאלות פעילות: {stats.questions}</li>
                 <li>משימות פעילות: {stats.tasks}</li>
                 <li>קטגוריות במערכת: {categories.length}</li>
+                <li>קטגוריות נבחרות לייצוא: {selectedExportCategories.length}</li>
               </ul>
             </div>
           </div>

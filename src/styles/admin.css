@@ -523,6 +523,17 @@
   background: color-mix(in srgb, #4a2040 80%, transparent);
 }
 
+.admin-export-cats {
+  margin-top: 0.75rem;
+}
+
+.admin-export-cat-count {
+  margin-inline-start: 0.35rem;
+  opacity: 0.72;
+  font-size: 0.78em;
+  font-weight: 600;
+}
+
 @media (max-width: 1100px) {
   .admin-tabs--6 {
     grid-template-columns: repeat(3, minmax(0, 1fr));

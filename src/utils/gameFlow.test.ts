@@ -187,7 +187,7 @@ describe('game flow simulation', () => {
     const task = pickTaskWithFallback('spicy', 'normal', [], true, { contentMode: 'mixed' });
     expect(task.category).toBe('spicy');
     const pool = filterTasks('spicy', 'advanced', [], true, { contentMode: 'mixed' });
-    expect(pool.length).toBe(50);
+    expect(pool.length).toBe(150);
     expect(pool.every((t) => t.category === 'spicy')).toBe(true);
   });
 });

@@ -11,15 +11,14 @@ export const QUESTION_GROUP_LABELS = {
   "money": "כסף, עבודה ואיזון",
   "creative": "דמיון חופשי — שאלות יצירתיות",
   "icebreaker": "חימום נעים — לפתוח את הערב",
-  "summary": "סגירת ערב — מה לוקחים איתנו",
-  "spicy": "שאלות 18+"
+  "summary": "סגירת ערב — מה לוקחים איתנו"
 } as const;
 
 export type QuestionGroup = keyof typeof QUESTION_GROUP_LABELS;
 
 export type CoupleQuestionTask = CoupleTask & {
   kind: 'question';
-  questionGroup: QuestionGroup;
+  questionGroup: QuestionGroup | 'meet100' | 'intimacy' | 'spicy';
 };
 
 export const allQuestions: CoupleQuestionTask[] = [

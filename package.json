@@ -20,6 +20,7 @@
     "deploy:build": "node scripts/build-production.mjs",
     "deploy:preview": "npm run deploy:build && vite preview --host",
     "generate:questions": "node scripts/generate-from-experience.mjs",
+    "import:bank": "node scripts/import-improved-bank.mjs",
     "generate:icons": "node scripts/generate-pwa-icons.mjs",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:firebase": "node scripts/check-firebase.mjs",
