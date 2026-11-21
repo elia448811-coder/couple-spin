@@ -41,7 +41,7 @@ function scanBundleForSecrets() {
 
 function validateWiring() {
   const main = read('src/main.tsx');
-  if (!/<AuthGuard>\s*\n?\s*<App/.test(main)) {
+  if (!/<AuthGuard>[\s\S]*<App\s*\/>[\s\S]*<\/AuthGuard>/.test(main)) {
     fail('main.tsx חייב לעטוף את App ב-AuthGuard');
   }
 
@@ -54,8 +54,12 @@ function validateWiring() {
     fail('חסר src/components/AuthGuard.tsx');
   } else {
     const guard = read('src/components/AuthGuard.tsx');
-    if (!guard.includes('useSiteGate') || !guard.includes('SiteGate')) {
-      fail('AuthGuard חייב להשתמש ב-useSiteGate ו-SiteGate');
+    if (!guard.includes('LoginScreen') || !guard.includes('!user.isAnonymous') ||
+        !guard.includes('isCurrentUserPendingApproval') || !guard.includes('isCurrentUserBanned')) {
+      fail('AuthGuard חייב לבדוק חשבון Firebase אמיתי, חסימה ואישור מנהל');
+    }
+    if (!guard.includes("import.meta.env.DEV && import.meta.env.VITE_PREVIEW_MODE === 'true'")) {
+      fail('מצב תצוגה מקדימה חייב להיות מוגבל לפיתוח בלבד');
     }
     if (/password\s*===/.test(guard)) {
       fail('AuthGuard לא צריך להשוות סיסמה בצד לקוח');
@@ -119,7 +123,7 @@ function validateVercelApi() {
 async function probeLiveWorker() {
   const url = (process.env.VITE_AUTH_API_URL || process.env.AUTH_TEST_URL || '').replace(/\/$/, '');
   if (!url) {
-    notes.push('Worker חי: דולג (VITE_AUTH_API_URL לא מוגדר — השער כבוי ב-build)');
+    notes.push('Worker הישן: לא נבדק ללא כתובת. הכניסה למשחק מוגנת באמצעות Firebase Auth.');
     return;
   }
 
