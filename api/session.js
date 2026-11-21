@@ -55,8 +55,13 @@ export default async function handler(req, res) {
   }
 
   const valid = verifySessionToken(secret, token);
-  if (!valid || await isSessionDenied(token)) {
-    json(res, 401, { ok: false, error: 'invalid_session' }, headers);
+  try {
+    if (!valid || await isSessionDenied(token)) {
+      json(res, 401, { ok: false, error: 'invalid_session' }, headers);
+      return;
+    }
+  } catch {
+    json(res, 503, { ok: false, error: 'auth_store_unavailable' }, headers);
     return;
   }
 

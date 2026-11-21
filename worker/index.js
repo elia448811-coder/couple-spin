@@ -7,7 +7,6 @@ import {
   MAX_PASSWORD_LEN,
   MAX_SESSION_TTL_MS,
   RATE_MAX_ATTEMPTS,
-  RATE_WINDOW_MS,
   isLegacyAllowed,
   isOriginAllowed,
   normalizeOrigin,
@@ -16,9 +15,9 @@ import {
   validateTokenShape,
 } from '../shared/auth-core.mjs';
 
+import { isSharedTokenRevoked, revokeSharedToken, sharedAttempt } from '../shared/auth-store.mjs';
+
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const rateByIp = new Map();
-const deniedTokens = new Map();
 
 function methods(env) {
   return String(env.CORS_METHODS || 'GET, POST, OPTIONS').split(',').map((method) => method.trim()).filter(Boolean);
@@ -65,35 +64,6 @@ function clientIp(request) {
 async function hash(value) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value)));
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function upstash(env, command) {
-  if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) return null;
-  const response = await fetch(`${env.UPSTASH_REDIS_REST_URL.replace(/\/$/, '')}/${command.map(encodeURIComponent).join('/')}`, {
-    headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_REST_TOKEN}` },
-  });
-  if (!response.ok) throw new Error('upstash_failed');
-  return (await response.json()).result;
-}
-
-async function checkRateLimit(ip, env) {
-  const key = `auth-rate:${await hash(ip)}`;
-  try {
-    const count = Number(await upstash(env, ['incr', key]));
-    if (Number.isFinite(count)) {
-      if (count === 1) await upstash(env, ['expire', key, String(Math.ceil(RATE_WINDOW_MS / 1000))]);
-      const over = count - RATE_MAX_ATTEMPTS;
-      return over > 0 ? { allowed: false, retryAfterSec: Math.min(900, 30 * 2 ** Math.min(over, 5)) } : { allowed: true, retryAfterSec: 0 };
-    }
-  } catch { /* fall through to worker-local limiter */ }
-  const now = Date.now();
-  if (rateByIp.size >= 500) for (const [storedKey, entry] of rateByIp) if (entry.resetAt <= now) rateByIp.delete(storedKey);
-  let entry = rateByIp.get(key);
-  if (!entry || entry.resetAt <= now) entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
-  entry.count += 1;
-  rateByIp.set(key, entry);
-  const over = entry.count - RATE_MAX_ATTEMPTS;
-  return over > 0 ? { allowed: false, retryAfterSec: Math.max(Math.min(900, 30 * 2 ** Math.min(over, 5)), Math.ceil((entry.resetAt - now) / 1000)) } : { allowed: true, retryAfterSec: 0 };
 }
 
 function base64Url(bytes) {
@@ -203,20 +173,9 @@ function requestToken(request, body) {
 }
 
 async function denyToken(env, token) {
-  const parsed = parseTokenParts(token);
-  const ttl = parsed && Number.isSafeInteger(parsed.exp) ? Math.max(1, Math.ceil((parsed.exp - Date.now()) / 1000)) : 0;
-  if (!ttl) return;
-  const key = `auth-deny:${await hash(token)}`;
-  deniedTokens.set(key, Date.now() + ttl * 1000);
-  try { await upstash(env, ['set', key, '1', 'EX', String(ttl)]); } catch { /* local deny list remains active */ }
-}
-
-async function tokenDenied(env, token) {
-  const key = `auth-deny:${await hash(token)}`;
-  const now = Date.now();
-  if (deniedTokens.size >= 500) for (const [storedKey, expiresAt] of deniedTokens) if (expiresAt <= now) deniedTokens.delete(storedKey);
-  if (deniedTokens.has(key)) return true;
-  try { return Boolean(await upstash(env, ['get', key])); } catch { return false; }
+  if (!await verifySessionToken(env, token)) return;
+  const ttl = Math.max(1, Math.ceil((parseTokenParts(token).exp - Date.now()) / 1000));
+  await revokeSharedToken(env, `auth-deny:${await hash(token)}`, ttl);
 }
 
 const CLEAR_COOKIE = 'couple_spin_session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
@@ -258,13 +217,24 @@ export default {
       const token = requestToken(request, body);
       if (!token) return json({ ok: false, error: 'missing_token' }, 401, cors);
       const valid = await verifySessionToken(env, token);
-      if (!valid || await tokenDenied(env, token)) return json({ ok: false, error: 'invalid_session' }, 401, cors);
+      try {
+        if (!valid || await isSharedTokenRevoked(env, `auth-deny:${await hash(token)}`)) {
+          return json({ ok: false, error: 'invalid_session' }, 401, cors);
+        }
+      } catch {
+        return json({ ok: false, error: 'auth_store_unavailable' }, 503, cors);
+      }
       return json({ ok: true }, 200, cors);
     }
 
     if (url.pathname === '/verify') {
       if (request.method !== 'POST') return methodNotAllowed(['POST', 'OPTIONS'], cors);
-      const rate = await checkRateLimit(clientIp(request), env);
+      let rate;
+      try {
+        rate = await sharedAttempt(env, `auth-rate:${await hash(clientIp(request))}`, RATE_MAX_ATTEMPTS);
+      } catch {
+        return json({ ok: false, error: 'auth_store_unavailable' }, 503, cors);
+      }
       if (!rate.allowed) {
         return json(
           { ok: false, error: 'rate_limited', retryAfterSec: rate.retryAfterSec },
@@ -302,7 +272,11 @@ export default {
       const body = await parseJsonBody(request);
       if (body === null) return json({ ok: false, error: 'bad_request' }, 400, { ...cors, 'Set-Cookie': CLEAR_COOKIE });
       const token = requestToken(request, body);
-      if (token) await denyToken(env, token);
+      try {
+        if (token) await denyToken(env, token);
+      } catch {
+        return json({ ok: false, error: 'auth_store_unavailable' }, 503, cors);
+      }
       return json({ ok: true }, 200, { ...cors, 'Set-Cookie': CLEAR_COOKIE });
     }
 

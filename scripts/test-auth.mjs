@@ -5,6 +5,7 @@
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { checkAuthStore } from './check-auth-store.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -72,7 +73,7 @@ function validateWorkerSource() {
   if (!worker.includes('createSessionToken') || !worker.includes('/session')) {
     fail('worker/index.js חייב session token + /session endpoint');
   }
-  if (!worker.includes('rateByIp') || !worker.includes('rate_limited')) {
+  if (!worker.includes('sharedAttempt') || !worker.includes('rate_limited')) {
     fail('worker/index.js חייב rate limiting');
   }
   if (!worker.includes('env.PASS_W')) {
@@ -165,6 +166,7 @@ async function probeLiveWorker() {
 
 console.log('▶ בדיקת מנגנון אימות...\n');
 
+await checkAuthStore();
 validateWiring();
 validateSiteGateSource();
 validateVercelApi();

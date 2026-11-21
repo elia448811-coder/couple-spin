@@ -8,6 +8,7 @@ import {
   MAX_PASSWORD_LEN,
   methodNotAllowed,
   readBody,
+  requiresSharedSessions,
   sessionSigningSecret,
   sitePassword,
   timingSafeEqual,
@@ -37,7 +38,13 @@ export default async function handler(req, res) {
   }
 
   const ip = clientIp(req);
-  const rate = await checkRateLimit(ip);
+  let rate;
+  try {
+    rate = await checkRateLimit(ip, { requireShared: requiresSharedSessions() });
+  } catch {
+    json(res, 503, { ok: false, error: 'auth_store_unavailable' }, headers);
+    return;
+  }
   if (!rate.allowed) {
     json(
       res,
