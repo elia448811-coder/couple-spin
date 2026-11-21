@@ -6,6 +6,8 @@ on:
     branches: [main, master]
     paths:
       - 'worker/**'
+      - 'shared/auth-core.mjs'
+      - 'shared/auth-store.mjs'
       - '.github/workflows/deploy-auth.yml'
 
 jobs:
@@ -18,12 +20,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install + smoke auth wiring
         run: |
           npm ci
+          npm run build
           node scripts/test-auth.mjs
 
       - name: Deploy Cloudflare Worker
@@ -33,9 +36,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
-          secrets: |
-            PASS_W
-            SESSION_SECRET
+          wranglerVersion: "4.165.0"
 
       - name: Worker URL reminder
         run: |

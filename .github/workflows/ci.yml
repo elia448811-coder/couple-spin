@@ -35,6 +35,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify copies of the Firestore rules
+        run: node scripts/check-firestore-rules-copies.mjs
+
       - name: Lint
         run: npm run lint
 
