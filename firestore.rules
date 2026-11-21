@@ -1,5 +1,5 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v32_SECURITY_ACTIVE_ACCOUNT
+// DOUBLE_GAME_RULES_v33_ACTIVE_ACCOUNT_ROOM_LOOKUP
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
@@ -9,7 +9,7 @@ service cloud.firestore {
     // Sole admin: locked UID and/or locked email from Auth token (not spoofable).
     function isAdmin() {
       return isAuth() && (
-        request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'
+        request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2' // gitleaks:allow public Firebase account identifier
         || (
           request.auth.token.email is string
           && request.auth.token.email.lower() == 'elia448811@gmail.com'
@@ -370,6 +370,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Require a subcollection so this rule cannot also grant writes to /users/{userId}.
     match /users/{userId}/{collectionId}/{document=**} {
       allow read: if isEmailSignedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if isEmailSignedIn() && request.auth.uid == userId;
@@ -383,9 +384,11 @@ service cloud.firestore {
     }
 
     match /roomCodes/{code} {
-      allow read: if isActiveAccount()
+      // Creating a room first checks whether its random code is already reserved.
+      allow get: if isActiveAccount()
         && validDisplayCode(code)
-        && resource.data.expiresAtMs > request.time.toMillis();
+        && (!exists(/databases/$(database)/documents/roomCodes/$(code))
+          || resource.data.expiresAtMs > request.time.toMillis());
       allow create: if isActiveAccount()
         && validDisplayCode(code)
         && request.resource.data.roomId is string

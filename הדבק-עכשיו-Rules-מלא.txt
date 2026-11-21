@@ -1,5 +1,5 @@
 rules_version = '2';
-// DOUBLE_GAME_RULES_v32_SECURITY_ACTIVE_ACCOUNT
+// DOUBLE_GAME_RULES_v33_ACTIVE_ACCOUNT_ROOM_LOOKUP
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
@@ -9,7 +9,7 @@ service cloud.firestore {
     // Sole admin: locked UID and/or locked email from Auth token (not spoofable).
     function isAdmin() {
       return isAuth() && (
-        request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'
+        request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2' // gitleaks:allow public Firebase account identifier
         || (
           request.auth.token.email is string
           && request.auth.token.email.lower() == 'elia448811@gmail.com'
@@ -29,15 +29,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    // Enforced server-side: profile must exist, not banned, not explicitly unapproved.
-    // Legacy docs without `approved` remain allowed (default true).
-    // Missing profile is NOT active — prevents Auth-only bypass of approval.
+    // Account access requires a positive approval recorded by an administrator.
     function isActiveAccount() {
       return isAdmin() || (
         isEmailSignedIn()
-        && callerUserDoc().exists
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && callerUserDoc().data.get('banned', false) == false
-        && callerUserDoc().data.get('approved', true) != false
+        && callerUserDoc().data.get('approved', false) == true
       );
     }
 
@@ -47,7 +45,7 @@ service cloud.firestore {
 
     function isRoomMember(roomId) {
       return isAuth()
-        && roomDoc(roomId).exists
+        && exists(/databases/$(database)/documents/rooms/$(roomId))
         && (
           roomDoc(roomId).data.hostUid == request.auth.uid
           || roomDoc(roomId).data.partnerUid == request.auth.uid
@@ -56,7 +54,7 @@ service cloud.firestore {
 
     function isRoomHost(roomId) {
       return isAuth()
-        && roomDoc(roomId).exists
+        && exists(/databases/$(database)/documents/rooms/$(roomId))
         && roomDoc(roomId).data.hostUid == request.auth.uid;
     }
 
@@ -65,7 +63,7 @@ service cloud.firestore {
     }
 
     function roomActive(roomId) {
-      return roomDoc(roomId).exists
+      return exists(/databases/$(database)/documents/rooms/$(roomId))
         && roomDoc(roomId).data.expiresAtMs > request.time.toMillis();
     }
 
@@ -269,7 +267,7 @@ service cloud.firestore {
 
     function userCreateSafe() {
       return (!('banned' in request.resource.data) || request.resource.data.banned == false)
-        && (!('approved' in request.resource.data) || request.resource.data.approved == false)
+        && request.resource.data.approved == false
         && (!('adminNote' in request.resource.data) || request.resource.data.adminNote == '');
     }
 
@@ -372,7 +370,8 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /users/{userId}/{document=**} {
+    // Require a subcollection so this rule cannot also grant writes to /users/{userId}.
+    match /users/{userId}/{collectionId}/{document=**} {
       allow read: if isEmailSignedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if isEmailSignedIn() && request.auth.uid == userId;
     }
@@ -385,9 +384,11 @@ service cloud.firestore {
     }
 
     match /roomCodes/{code} {
-      allow read: if isActiveAccount()
+      // Creating a room first checks whether its random code is already reserved.
+      allow get: if isActiveAccount()
         && validDisplayCode(code)
-        && resource.data.expiresAtMs > request.time.toMillis();
+        && (!exists(/databases/$(database)/documents/roomCodes/$(code))
+          || resource.data.expiresAtMs > request.time.toMillis());
       allow create: if isActiveAccount()
         && validDisplayCode(code)
         && request.resource.data.roomId is string

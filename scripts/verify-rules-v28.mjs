@@ -5,6 +5,7 @@
  * - config/contentItems writes allowed only for sole admin UID
  */
 import { readFileSync, existsSync } from 'node:fs';
+import './check-firestore-rules-copies.mjs';
 import { resolve } from 'node:path';
 import { initializeApp } from 'firebase/app';
 import {
@@ -92,18 +93,6 @@ async function expectOk(label, fn) {
   } catch (e) {
     fail(label, e instanceof Error ? e.message : String(e));
   }
-}
-
-// 1) Local paste file marker
-const pastePath = resolve(process.cwd(), 'הדבק-עכשיו-Rules-מלא.txt');
-const pasteAlt = resolve(process.cwd(), 'PASTE-FIREBASE-RULES.txt');
-const paste = existsSync(pastePath)
-  ? readFileSync(pastePath, 'utf8')
-  : readFileSync(pasteAlt, 'utf8');
-if (paste.includes('DOUBLE_GAME_RULES_v28_ADMIN_UID') && paste.includes(ADMIN_UID)) {
-  pass('local paste file has v28 + admin UID');
-} else {
-  fail('local paste file missing v28 marker or admin UID');
 }
 
 // 2) Non-admin cannot write config / contentItems

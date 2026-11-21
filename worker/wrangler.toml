@@ -10,3 +10,8 @@ ALLOWED_ORIGINS = "https://elia448811-coder.github.io,https://couple-spin.vercel
 # Secrets (not in git):
 #   npx wrangler secret put PASS_W
 #   npx wrangler secret put SESSION_SECRET
+#   npx wrangler secret put UPSTASH_REDIS_REST_URL
+#   npx wrangler secret put UPSTASH_REDIS_REST_TOKEN
+
+[secrets]
+required = ["PASS_W", "SESSION_SECRET", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]

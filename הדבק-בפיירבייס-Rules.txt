@@ -10,10 +10,44 @@
 ============================================================
 
 rules_version = '2';
+// DOUBLE_GAME_RULES_v33_ACTIVE_ACCOUNT_ROOM_LOOKUP
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
       return request.auth != null;
+    }
+
+    // Sole admin: locked UID and/or locked email from Auth token (not spoofable).
+    function isAdmin() {
+      return isAuth() && (
+        request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2' // gitleaks:allow public Firebase account identifier
+        || (
+          request.auth.token.email is string
+          && request.auth.token.email.lower() == 'elia448811@gmail.com'
+        )
+      );
+    }
+
+    // Real account (blocks anonymous Auth used only for bootstrap).
+    function isEmailSignedIn() {
+      return isAuth()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() > 3
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function callerUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Account access requires a positive approval recorded by an administrator.
+    function isActiveAccount() {
+      return isAdmin() || (
+        isEmailSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && callerUserDoc().data.get('banned', false) == false
+        && callerUserDoc().data.get('approved', false) == true
+      );
     }
 
     function roomDoc(roomId) {
@@ -22,7 +56,7 @@ service cloud.firestore {
 
     function isRoomMember(roomId) {
       return isAuth()
-        && roomDoc(roomId).exists
+        && exists(/databases/$(database)/documents/rooms/$(roomId))
         && (
           roomDoc(roomId).data.hostUid == request.auth.uid
           || roomDoc(roomId).data.partnerUid == request.auth.uid
@@ -31,7 +65,7 @@ service cloud.firestore {
 
     function isRoomHost(roomId) {
       return isAuth()
-        && roomDoc(roomId).exists
+        && exists(/databases/$(database)/documents/rooms/$(roomId))
         && roomDoc(roomId).data.hostUid == request.auth.uid;
     }
 
@@ -40,7 +74,7 @@ service cloud.firestore {
     }
 
     function roomActive(roomId) {
-      return roomDoc(roomId).exists
+      return exists(/databases/$(database)/documents/rooms/$(roomId))
         && roomDoc(roomId).data.expiresAtMs > request.time.toMillis();
     }
 
@@ -230,40 +264,166 @@ service cloud.firestore {
         );
     }
 
-    match /users/{userId}/{document=**} {
-      allow read, write: if isAuth() && request.auth.uid == userId;
+    function validUserProfile() {
+      return request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 32
+        && request.resource.data.partnerDisplayName is string
+        && request.resource.data.partnerDisplayName.size() <= 32
+        && request.resource.data.lastSeenMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.schemaVersion is int;
+    }
+
+    function userCreateSafe() {
+      return (!('banned' in request.resource.data) || request.resource.data.banned == false)
+        && request.resource.data.approved == false
+        && (!('adminNote' in request.resource.data) || request.resource.data.adminNote == '');
+    }
+
+    function userSelfFieldLocks() {
+      return unchanged('banned')
+        && unchanged('approved')
+        && unchanged('adminNote');
+    }
+
+    function userSelfUpdateKeysOk() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly([
+          'displayName',
+          'partnerDisplayName',
+          'avatar',
+          'lastSeenMs',
+          'updatedAtMs',
+          'updatedAt',
+          'gamesPlayed',
+          'lastRoomId',
+          'username',
+          'schemaVersion',
+          'createdAt',
+          'createdAtMs'
+        ]);
+    }
+
+    // Public site settings (login page needs registration toggle before auth)
+    match /config/{docId} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Legacy admins collection — locked forever
+    match /admins/{uid} {
+      allow read, write: if false;
+    }
+
+    // Content bank overrides (questions/tasks edited in admin)
+    match /contentItems/{itemId} {
+      allow read: if isActiveAccount();
+      allow create, update: if isAdmin()
+        && request.resource.data.updatedByUid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // Root user account document
+    match /users/{userId} {
+      allow read: if isEmailSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isEmailSignedIn() && (
+        (
+          request.auth.uid == userId
+          && validUserProfile()
+          && userCreateSafe()
+        )
+        || (
+          isAdmin()
+          && request.resource.data.uid == userId
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 32
+        )
+      );
+      allow update: if isEmailSignedIn()
+        && unchanged('uid')
+        && unchanged('createdAtMs')
+        && (
+          (
+            request.auth.uid == userId
+            && userSelfFieldLocks()
+            && userSelfUpdateKeysOk()
+            && (
+              validUserProfile()
+              || request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['lastSeenMs', 'updatedAtMs', 'updatedAt', 'gamesPlayed', 'lastRoomId', 'username'])
+            )
+          )
+          || (
+            isAdmin()
+            // Sole admin account cannot be banned / unapproved via rules.
+            && !(userId == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'
+              && (
+                ('banned' in request.resource.data && request.resource.data.banned == true)
+                || ('approved' in request.resource.data && request.resource.data.approved == false)
+              ))
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'banned',
+                'adminNote',
+                'displayName',
+                'approved',
+                'username',
+                'updatedAtMs',
+                'updatedAt'
+              ])
+          )
+        );
+      allow delete: if false;
+    }
+
+    // Require a subcollection so this rule cannot also grant writes to /users/{userId}.
+    match /users/{userId}/{collectionId}/{document=**} {
+      allow read: if isEmailSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isEmailSignedIn() && request.auth.uid == userId;
     }
 
     match /rateLimits/{uid} {
-      allow read: if isAuth() && request.auth.uid == uid;
-      allow create: if isAuth() && request.auth.uid == uid && rateLimitCreateOk();
-      allow update: if isAuth() && request.auth.uid == uid && rateLimitUpdateOk();
+      allow read: if isActiveAccount() && request.auth.uid == uid;
+      allow create: if isActiveAccount() && request.auth.uid == uid && rateLimitCreateOk();
+      allow update: if isActiveAccount() && request.auth.uid == uid && rateLimitUpdateOk();
       allow delete: if false;
     }
 
     match /roomCodes/{code} {
-      allow read: if isAuth()
+      // Creating a room first checks whether its random code is already reserved.
+      allow get: if isActiveAccount()
         && validDisplayCode(code)
-        && resource.data.expiresAtMs > request.time.toMillis();
-      allow create: if isAuth()
+        && (!exists(/databases/$(database)/documents/roomCodes/$(code))
+          || resource.data.expiresAtMs > request.time.toMillis());
+      allow create: if isActiveAccount()
         && validDisplayCode(code)
         && request.resource.data.roomId is string
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.expiresAtMs > request.time.toMillis()
         && request.resource.data.expiresAtMs
           <= request.time.toMillis() + 3 * 60 * 60 * 1000;
-      allow delete: if isAuth() && resource.data.hostUid == request.auth.uid;
+      allow delete: if isActiveAccount() && resource.data.hostUid == request.auth.uid;
     }
 
     match /rooms/{roomId} {
-      allow read: if isAuth()
+      // Members always; waiting empty rooms readable for join transaction after code lookup.
+      allow read: if isActiveAccount()
         && roomResourceActive()
         && (
           resource.data.hostUid == request.auth.uid
           || resource.data.partnerUid == request.auth.uid
+          || (
+            resource.data.status == 'waiting'
+            && resource.data.partnerUid == null
+          )
         );
 
-      allow create: if isAuth()
+      allow create: if isActiveAccount()
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.partnerUid == null
         && request.resource.data.version == 0
@@ -279,7 +439,7 @@ service cloud.firestore {
         && request.resource.data.hostReady == false
         && request.resource.data.partnerReady == false;
 
-      allow update: if isAuth() && roomResourceActive() && lockedRoomIdentity() && (
+      allow update: if isActiveAccount() && roomResourceActive() && lockedRoomIdentity() && (
         hostPresenceUpdate()
         || partnerPresenceUpdate()
         || hostVersionBump()
@@ -288,27 +448,14 @@ service cloud.firestore {
         || partnerLeaveUpdate()
       );
 
-      allow delete: if isAuth()
+      allow delete: if isActiveAccount()
         && resource.data.hostUid == request.auth.uid;
 
       match /events/{eventId} {
-        allow read: if isAuth() && isRoomMember(roomId) && roomActive(roomId);
-        allow create: if isAuth()
+        allow read: if isActiveAccount() && isRoomMember(roomId);
+        allow create: if isActiveAccount()
           && isRoomMember(roomId)
-          && roomActive(roomId)
-          && request.resource.data.createdBy == request.auth.uid
-          && request.resource.data.version == roomDoc(roomId).data.version + 1
-          && request.resource.data.createdAtMs is int
-          && validEventType()
-          && gameStartAllowed(roomId)
-          && request.resource.data.keys().hasOnly([
-            'type', 'version', 'createdBy', 'createdAtMs', 'payload', 'createdAt'
-          ])
-          && request.resource.data.payload.keys().size() <= 40
-          && (
-            isRoomHost(roomId)
-            || partnerMayCreateEvent()
-          );
+          && request.resource.data.createdBy == request.auth.uid;
         allow update, delete: if false;
       }
     }
