@@ -19,15 +19,17 @@ export type AdminUserRow = {
   createdAtMs: number;
   lastRoomId: string | null;
   banned: boolean;
-  /** Missing on legacy docs = treated as approved. Explicit false = pending. */
   approved: boolean;
   pending: boolean;
   adminNote: string;
 };
 
+export function hasAccountApproval(profile: { approved?: unknown } | undefined): boolean {
+  return profile?.approved === true;
+}
+
 function parseUser(uid: string, raw: Record<string, unknown>): AdminUserRow {
-  const approvedExplicit = raw.approved;
-  const approved = approvedExplicit === false ? false : true;
+  const approved = hasAccountApproval(raw);
   return {
     uid,
     username: typeof raw.username === 'string' ? raw.username : '',
@@ -39,7 +41,7 @@ function parseUser(uid: string, raw: Record<string, unknown>): AdminUserRow {
     lastRoomId: typeof raw.lastRoomId === 'string' ? raw.lastRoomId : null,
     banned: Boolean(raw.banned),
     approved,
-    pending: approvedExplicit === false && !raw.banned,
+    pending: !approved && !raw.banned,
     adminNote: typeof raw.adminNote === 'string' ? raw.adminNote : '',
   };
 }
@@ -102,17 +104,16 @@ export async function isCurrentUserBanned(): Promise<boolean> {
   return Boolean(snap.exists() && (snap.data() as { banned?: boolean }).banned);
 }
 
-/** Pending = explicit approved:false (legacy missing field = allowed). */
+/** Legacy profiles without an approval are reviewed through the same admin queue. */
 export async function isCurrentUserPendingApproval(): Promise<boolean> {
   const auth = await getFirebaseAuth();
   const user = auth?.currentUser;
   if (!user || user.isAnonymous) return false;
   if (isSoleAdminIdentity(user.uid, user.email)) return false;
   const db = await getFirestoreDb();
-  if (!db) return false;
+  if (!db) return true;
   const snap = await getDoc(doc(db, 'users', user.uid));
-  if (!snap.exists()) return false;
-  return (snap.data() as { approved?: boolean }).approved === false;
+  return !hasAccountApproval(snap.data());
 }
 
 /**

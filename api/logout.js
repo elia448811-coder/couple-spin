@@ -39,6 +39,11 @@ export default async function handler(req, res) {
   }
 
   const token = requestToken(req, body);
-  if (token) await denySessionToken(token);
+  try {
+    if (token) await denySessionToken(token);
+  } catch {
+    json(res, 503, { ok: false, error: 'auth_store_unavailable' }, headers);
+    return;
+  }
   json(res, 200, { ok: true }, { ...headers, 'Set-Cookie': CLEAR_COOKIE });
 }

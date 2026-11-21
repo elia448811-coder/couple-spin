@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./cloudSync', () => ({ scheduleCloudPush: vi.fn() }));
 
 function mockStorage() {
   const store = new Map<string, string>();
@@ -18,6 +20,10 @@ describe('customContent in game pool', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', mockStorage());
     localStorage.clear();
+  });
+
+  afterEach(async () => {
+    await vi.dynamicImportSettled();
   });
 
   it('custom question appears in filterTasks pool', async () => {

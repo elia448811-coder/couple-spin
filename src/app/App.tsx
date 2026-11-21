@@ -9,8 +9,6 @@ import { useToast } from '../contexts/ToastContext';
 import { useCoupleRoom } from '../hooks/useCoupleRoom';
 import { useDeviceLayout } from '../hooks/useDeviceLayout';
 import { useGameState } from '../hooks/useGameState';
-import { TutorialScreen } from '../screens/TutorialScreen';
-import { WelcomeScreen } from '../screens/WelcomeScreen';
 import type { Screen } from '../types/game';
 import { hasCompletedOnboarding, markOnboardingComplete } from '../utils/onboarding';
 import { isDiscreteMode } from '../utils/privacy';
@@ -29,6 +27,8 @@ import '../styles/cinematic.css';
 
 const go = (navigate: (s: Screen) => void, screen: Screen) => () => navigate(screen);
 
+const TutorialScreen = lazy(() => import('../screens/TutorialScreen').then((m) => ({ default: m.TutorialScreen })));
+const WelcomeScreen = lazy(() => import('../screens/WelcomeScreen').then((m) => ({ default: m.WelcomeScreen })));
 const QuickSetupScreen = lazy(() =>
   import('../screens/QuickSetupScreen').then((m) => ({ default: m.QuickSetupScreen })),
 );

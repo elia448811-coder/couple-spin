@@ -15,6 +15,8 @@ import {
   validateTokenShape,
 } from '../../shared/auth-core.mjs';
 
+import { hasSharedAuthStore, isSharedTokenRevoked, revokeSharedToken, sharedAttempt } from '../../shared/auth-store.mjs';
+
 export { MAX_BODY_BYTES, MAX_PASSWORD_LEN };
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const rateByKey = new Map();
@@ -91,33 +93,19 @@ function memoryRateLimit(ip, maxAttempts = RATE_MAX_ATTEMPTS) {
     : { allowed: true, retryAfterSec: 0 };
 }
 
-async function upstash(command) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  const response = await fetch(`${url.replace(/\/$/, '')}/${command.map(encodeURIComponent).join('/')}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error('upstash_failed');
-  return (await response.json()).result;
-}
-
-/** Upstash-backed when configured; local fallback keeps development usable. */
 export async function checkRateLimit(ip, options = {}) {
   const maxAttempts = Number(options.maxAttempts) > 0 ? Number(options.maxAttempts) : RATE_MAX_ATTEMPTS;
   const prefix = typeof options.prefix === 'string' && options.prefix ? options.prefix : 'auth-rate';
-  try {
-    const key = hashedKey(prefix, ip);
-    const count = Number(await upstash(['incr', key]));
-    if (!Number.isFinite(count)) return memoryRateLimit(`${prefix}:${ip}`, maxAttempts);
-    if (count === 1) await upstash(['expire', key, String(Math.ceil(RATE_WINDOW_MS / 1000))]);
-    const over = count - maxAttempts;
-    return over > 0
-      ? { allowed: false, retryAfterSec: Math.min(900, 30 * 2 ** Math.min(over, 5)) }
-      : { allowed: true, retryAfterSec: 0 };
-  } catch {
-    return memoryRateLimit(`${prefix}:${ip}`, maxAttempts);
+  if (hasSharedAuthStore(process.env)) {
+    try {
+      return await sharedAttempt(process.env, hashedKey(prefix, ip), maxAttempts);
+    } catch (error) {
+      if (options.requireShared) throw error;
+    }
+  } else if (options.requireShared) {
+    throw new Error('auth_store_unavailable');
   }
+  return memoryRateLimit(`${prefix}:${ip}`, maxAttempts);
 }
 
 function hmacSign(secret, message) {
@@ -151,6 +139,8 @@ export function sitePassword() {
   return process.env.SITE_PASSWORD || process.env.PASS_W || '';
 }
 
+export function requiresSharedSessions() { return production(); }
+
 export function createSessionToken(secret = sessionSigningSecret()) {
   if (!secret) return null;
   const exp = Date.now() + SESSION_TTL_MS;
@@ -180,24 +170,23 @@ export function requestToken(req, body) {
   return String(body?.token || (auth.startsWith('Bearer ') ? auth.slice(7).trim() : '') || readCookie(req, 'couple_spin_session') || '').trim();
 }
 
-function pruneDenied(now) {
-  if (deniedTokens.size >= 500) for (const [key, expiresAt] of deniedTokens) if (expiresAt <= now) deniedTokens.delete(key);
-}
-
 export async function denySessionToken(token) {
-  const parsed = parseTokenParts(token);
-  const ttl = parsed && Number.isSafeInteger(parsed.exp) ? Math.max(1, Math.ceil((parsed.exp - Date.now()) / 1000)) : 0;
-  if (!ttl) return;
+  if (!verifySessionToken(sessionSigningSecret(), token)) return;
+  const expiresAt = parseTokenParts(token).exp;
+  const ttl = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
   const key = hashedKey('auth-deny', token);
-  deniedTokens.set(key, Date.now() + ttl * 1000);
-  try { await upstash(['set', key, '1', 'EX', String(ttl)]); } catch { /* memory fallback already set */ }
+  if (production() || hasSharedAuthStore(process.env)) {
+    await revokeSharedToken(process.env, key, ttl);
+    return;
+  }
+  for (const [entry, expiration] of deniedTokens) if (expiration <= Date.now()) deniedTokens.delete(entry);
+  deniedTokens.set(key, expiresAt);
 }
 
 export async function isSessionDenied(token) {
   const key = hashedKey('auth-deny', token);
-  pruneDenied(Date.now());
-  if (deniedTokens.has(key)) return true;
-  try { return Boolean(await upstash(['get', key])); } catch { return false; }
+  if (production() || hasSharedAuthStore(process.env)) return isSharedTokenRevoked(process.env, key);
+  return (deniedTokens.get(key) ?? 0) > Date.now();
 }
 
 export function readBody(req) {
