@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('./cloudSync', () => ({ scheduleCloudPush: vi.fn() }));
+
 function mockStorage() {
   const store = new Map<string, string>();
   return {

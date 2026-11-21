@@ -6,6 +6,8 @@ import {
   removeCustomContent,
 } from './customContent';
 
+vi.mock('./cloudSync', () => ({ scheduleCloudPush: vi.fn() }));
+
 function mockStorage() {
   const store = new Map<string, string>();
   return {
@@ -25,7 +27,8 @@ describe('customContent', () => {
     vi.stubGlobal('localStorage', mockStorage());
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await vi.dynamicImportSettled();
     vi.unstubAllGlobals();
   });
 
