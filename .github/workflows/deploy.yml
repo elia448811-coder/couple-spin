@@ -36,9 +36,6 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      - name: Auth mechanism checks
-        run: node scripts/test-auth.mjs
-
       - name: Dependency audit (high+)
         run: npm audit --audit-level=high
 
@@ -69,12 +66,16 @@ jobs:
       - name: Bundle size budget
         run: node scripts/check-bundle-budget.mjs
 
+      - name: Auth mechanism checks
+        run: node scripts/test-auth.mjs
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: dist
 
   deploy:
+    if: github.event.repository.has_pages == true
     needs: build
     runs-on: ubuntu-latest
     environment:
