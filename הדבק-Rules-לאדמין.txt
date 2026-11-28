@@ -1,14 +1,19 @@
 rules_version = '2';
-// Couple Spin account, backup and room permissions.
+// DOUBLE_GAME_RULES_v33_ACTIVE_ACCOUNT_ROOM_LOOKUP
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAuth() {
       return request.auth != null;
     }
 
-    // The administrator is provisioned with this UID by a trusted operator.
+    // Sole admin: the pre-provisioned Firebase Auth account.
     function isAdmin() {
       return isAuth() && request.auth.uid == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'; // gitleaks:allow public Firebase account identifier
+    }
+
+    function registrationOpen() {
+      return !exists(/databases/$(database)/documents/config/app)
+        || get(/databases/$(database)/documents/config/app).data.get('registrationEnabled', true) == true;
     }
 
     // Real account (blocks anonymous Auth used only for bootstrap).
@@ -33,68 +38,83 @@ service cloud.firestore {
       );
     }
 
+    function roomDoc(roomId) {
+      return get(/databases/$(database)/documents/rooms/$(roomId));
+    }
+
+    function isRoomMember(roomId) {
+      return isAuth()
+        && exists(/databases/$(database)/documents/rooms/$(roomId))
+        && (
+          roomDoc(roomId).data.hostUid == request.auth.uid
+          || roomDoc(roomId).data.partnerUid == request.auth.uid
+        );
+    }
+
+    function roomResourceActive() {
+      return resource.data.expiresAtMs > request.time.toMillis();
+    }
+
+    function roomActive(roomId) {
+      return exists(/databases/$(database)/documents/rooms/$(roomId))
+        && roomDoc(roomId).data.expiresAtMs > request.time.toMillis();
+    }
+
     function unchanged(field) {
       return !(field in request.resource.data)
         || request.resource.data[field] == resource.data[field];
     }
 
-    function roomPath(roomId) {
-      return /databases/$(database)/documents/rooms/$(roomId);
+    function hostPresenceUpdate() {
+      return resource.data.hostUid == request.auth.uid
+        && unchanged('partnerUid')
+        && unchanged('hostName')
+        && unchanged('partnerName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('status')
+        && unchanged('lastEventId')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['hostReady', 'hostLastSeenMs', 'updatedAtMs', 'updatedBy', 'updatedAt']);
     }
 
-    function currentSyncPath(roomId) {
-      return /databases/$(database)/documents/rooms/$(roomId)/sync/current;
+    function partnerPresenceUpdate() {
+      return resource.data.partnerUid == request.auth.uid
+        && unchanged('partnerUid')
+        && unchanged('hostName')
+        && unchanged('partnerName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('status')
+        && unchanged('lastEventId')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['partnerReady', 'partnerLastSeenMs', 'updatedAtMs', 'updatedBy', 'updatedAt']);
     }
 
-    function liveRoomMember(room) {
-      return room.expiresAtMs > request.time.toMillis()
-        && (room.hostUid == request.auth.uid || room.partnerUid == request.auth.uid);
-    }
-
-    function presenceOnly(room, after, roleReady, roleSeen) {
-      let changed = after.diff(room).affectedKeys();
-      return changed.hasOnly([roleReady, roleSeen, 'updatedAtMs', 'updatedAt', 'updatedBy'])
-        && after[roleReady] is bool
-        && after[roleSeen] is int
-        && after.updatedAtMs is int && after.updatedAt == request.time
-        && after.updatedBy == request.auth.uid;
-    }
-
-    function nextHostEvent(roomId, room, after) {
-      let state = getAfter(currentSyncPath(roomId)).data;
-      return after.diff(room).affectedKeys().hasOnly(['version', 'updatedAtMs', 'updatedAt', 'updatedBy', 'status'])
-        && after.updatedBy == request.auth.uid && after.updatedAtMs is int && after.updatedAt == request.time
-        && after.version is int && after.version == room.version + 1 && after.version <= 2048
-        && state.version == after.version && state.createdAt == request.time
-        && (
-          (state.type == 'GAME_STARTED' && room.hostReady && room.partnerReady && after.status == 'playing')
-          || (state.type == 'GAME_ENDED' && after.status == 'ended')
-          || (state.type == 'GAME_SNAPSHOT' && after.status == room.status)
-        );
-    }
-
-    function validHostSync(roomId, state) {
-      let room = get(roomPath(roomId)).data;
-      let after = getAfter(roomPath(roomId)).data;
-      return liveRoomMember(room) && room.hostUid == request.auth.uid && room.partnerUid != null
-        && state.keys().hasOnly(['version','createdAt','type','payload','coupleSpinExpireAt'])
-        && state.version is int && state.version == room.version + 1 && state.version <= 2048
-        && state.version == after.version && state.createdAt == request.time
-        && state.coupleSpinExpireAt == timestamp.value(room.expiresAtMs)
-        && state.payload is string && state.payload.toUtf8().size() <= 120000
-        && ((state.type == 'GAME_STARTED' && state.payload == '')
-          || (state.type in ['GAME_SNAPSHOT', 'GAME_ENDED'] && state.payload.size() > 0));
-    }
-
-    function boundedProfileFields() {
-      let d = request.resource.data;
-      return d.get('username', '') is string && d.get('username', '').size() <= 32
-        && d.get('avatar', '') is string && d.get('avatar', '').size() <= 8
-        && (d.get('lastRoomId', null) == null || (d.lastRoomId is string && d.lastRoomId.size() <= 128))
-        && d.get('gamesPlayed', 0) is int && d.get('gamesPlayed', 0) >= 0
-        && d.get('createdAtMs', 0) is int && d.get('lastSeenMs', 0) is int
-        && d.get('updatedAtMs', 0) is int && d.get('createdAt', request.time) is timestamp
-        && d.get('updatedAt', request.time) is timestamp;
+    function partnerLeaveUpdate() {
+      return resource.data.partnerUid == request.auth.uid
+        && request.resource.data.partnerUid == null
+        && request.resource.data.partnerName == null
+        && request.resource.data.partnerReady == false
+        && request.resource.data.partnerLastSeenMs == 0
+        && request.resource.data.status == 'waiting'
+        && unchanged('hostName')
+        && unchanged('eveningTitle')
+        && unchanged('version')
+        && unchanged('lastEventId')
+        && unchanged('hostReady')
+        && unchanged('hostLastSeenMs')
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'partnerUid',
+            'partnerName',
+            'partnerReady',
+            'partnerLastSeenMs',
+            'status',
+            'updatedAtMs',
+            'updatedBy',
+            'updatedAt'
+          ]);
     }
 
     function validUserProfile() {
@@ -110,14 +130,17 @@ service cloud.firestore {
     }
 
     function userCreateSafe() {
-      return request.resource.data.keys().hasOnly([
-          'uid','username','displayName','partnerDisplayName','avatar','createdAtMs','createdAt',
-          'lastSeenMs','updatedAtMs','updatedAt','schemaVersion','lastRoomId','gamesPlayed','approved','banned'
-        ])
-        && request.resource.data.get('banned', false) == false
-        && request.resource.data.approved == false
-        && (!exists(/databases/$(database)/documents/config/app)
-          || get(/databases/$(database)/documents/config/app).data.get('registrationEnabled', true) == true);
+      let data = request.resource.data;
+      return data.keys().hasOnly(['uid', 'displayName', 'partnerDisplayName', 'avatar', 'username',
+          'createdAt', 'createdAtMs', 'lastSeenMs', 'updatedAt', 'updatedAtMs',
+          'schemaVersion', 'lastRoomId', 'gamesPlayed', 'banned', 'approved', 'adminNote'])
+        && data.get('banned', false) == false && data.approved == false && data.get('adminNote', '') == ''
+        && data.get('gamesPlayed', 0) == 0 && data.get('createdAtMs', 0) is int
+        && data.get('avatar', '') is string && data.get('avatar', '').size() <= 8
+        && data.get('username', '') is string && data.get('username', '').size() <= 32
+        && (data.get('lastRoomId', null) == null || (data.lastRoomId is string && data.lastRoomId.size() <= 128))
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     function userSelfFieldLocks() {
@@ -165,23 +188,28 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Root user account document
-    match /users/{userId} {
+    // Administrator notes are private, including during migration from old profiles.
+    match /adminUserNotes/{userId} {
       allow read: if isAdmin();
-      // Legacy profiles with a private note are admin-only until migrated.
-      allow get: if isEmailSignedIn() && request.auth.uid == userId
-        && (resource == null || resource.data.get('adminNote', '') == '');
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['note'])
+        && request.resource.data.note is string && request.resource.data.note.size() <= 200;
+    }
+
+    match /users/{userId} {
+      allow list: if isAdmin();
+      allow get: if isAdmin() || (isEmailSignedIn() && request.auth.uid == userId
+        && (!exists(/databases/$(database)/documents/users/$(userId)) || resource.data.get('adminNote', '') == ''));
       allow create: if isEmailSignedIn() && (
         (
           request.auth.uid == userId
+          && registrationOpen()
           && validUserProfile()
           && userCreateSafe()
-          && boundedProfileFields()
         )
         || (
           isAdmin()
-          && !('adminNote' in request.resource.data)
           && request.resource.data.uid == userId
+          && request.resource.data.get('adminNote', '') == ''
           && request.resource.data.displayName is string
           && request.resource.data.displayName.size() > 0
           && request.resource.data.displayName.size() <= 32
@@ -193,9 +221,9 @@ service cloud.firestore {
         && (
           (
             request.auth.uid == userId
+            && isActiveAccount()
             && userSelfFieldLocks()
             && userSelfUpdateKeysOk()
-            && boundedProfileFields()
             && (
               validUserProfile()
               || request.resource.data.diff(resource.data).affectedKeys()
@@ -204,8 +232,7 @@ service cloud.firestore {
           )
           || (
             isAdmin()
-            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminNote'])
-              || !('adminNote' in request.resource.data))
+            && (unchanged('adminNote') || request.resource.data.get('adminNote', '') == '')
             // Sole admin account cannot be banned / unapproved via rules.
             && !(userId == 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2'
               && (
@@ -227,45 +254,39 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /adminUserNotes/{uid} {
-      allow read: if isAdmin();
-      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly(['note'])
-        && request.resource.data.note is string && request.resource.data.note.size() <= 200;
+    // Only these four documents are used by the profile and cloud sync clients.
+    match /users/{userId}/{collectionId}/{documentId} {
+      function isCloudDocument() {
+        return (collectionId == 'meta' && documentId in ['profile', 'health'])
+          || (collectionId == 'data' && documentId in ['bundle', 'activeGame']);
+      }
+      allow get: if isCloudDocument() && (isAdmin() || (isActiveAccount() && request.auth.uid == userId));
+      allow write: if isCloudDocument() && isActiveAccount() && request.auth.uid == userId;
     }
 
-    match /users/{userId}/meta/health {
-      allow get: if isActiveAccount() && request.auth.uid == userId;
-      allow create, update: if isActiveAccount() && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['ok','at','schemaVersion','client'])
-        && request.resource.data.ok == true && request.resource.data.at == request.time
-        && request.resource.data.schemaVersion is int && request.resource.data.client == 'couple-spin';
+    // Admission, code reservations, counters and event writes belong to the room API.
+    match /users/{userId}/coupleSpinBackup/{name} {
+      function ownBackup() {
+        return isActiveAccount() && request.auth.uid == userId && name in ['bundle', 'activeGame'];
+      }
+      allow get, delete: if ownBackup();
+      allow create, update: if ownBackup() && request.resource.data.keys().hasOnly(['payload', 'updatedAtMs', 'updatedAt'])
+        && request.resource.data.payload is string && request.resource.data.payload.toUtf8().size() <= 700000
+        && request.resource.data.updatedAtMs is int && request.resource.data.updatedAt == request.time;
     }
 
-    match /users/{userId}/data/{name} {
-      allow get: if isActiveAccount() && request.auth.uid == userId && name in ['bundle','activeGame'];
-      allow create, update: if isActiveAccount() && request.auth.uid == userId && name in ['bundle','activeGame']
-        && request.resource.data.keys().hasOnly(['payload','updatedAtMs','updatedAt'])
-        && request.resource.data.updatedAt == request.time && request.resource.data.updatedAtMs is int
-        && request.resource.data.payload is string && request.resource.data.payload.toUtf8().size() <= 700000;
-      allow delete: if isActiveAccount() && request.auth.uid == userId && name in ['bundle','activeGame'];
-    }
-
-    // Admission, reservations, and per-account budgets are managed by the room callable.
     match /rooms/{roomId} {
-      allow get: if isActiveAccount() && liveRoomMember(resource.data);
-      allow update: if isActiveAccount() && liveRoomMember(resource.data) && (
-        (resource.data.hostUid == request.auth.uid && (
-          presenceOnly(resource.data, request.resource.data, 'hostReady', 'hostLastSeenMs')
-          || nextHostEvent(roomId, resource.data, request.resource.data)
-        ))
-        || (resource.data.partnerUid == request.auth.uid &&
-          presenceOnly(resource.data, request.resource.data, 'partnerReady', 'partnerLastSeenMs'))
-      );
+      allow get: if isActiveAccount() && roomResourceActive()
+        && (resource.data.hostUid == request.auth.uid || resource.data.partnerUid == request.auth.uid);
 
-      // A single replaceable snapshot bounds storage and never replays retired events.
-      match /sync/current {
-        allow get: if isActiveAccount() && liveRoomMember(get(roomPath(roomId)).data);
-        allow create, update: if isActiveAccount() && validHostSync(roomId, request.resource.data);
+      allow update: if isActiveAccount() && roomResourceActive()
+        && (hostPresenceUpdate() || partnerPresenceUpdate() || partnerLeaveUpdate());
+
+      match /gameEvents/{eventId} {
+        allow get: if isActiveAccount() && roomActive(roomId) && isRoomMember(roomId);
+        allow list: if isActiveAccount() && roomActive(roomId) && isRoomMember(roomId)
+          && request.query.limit > 0 && request.query.limit <= 32
+          && request.query.get('offset', 0) == 0;
       }
     }
   }

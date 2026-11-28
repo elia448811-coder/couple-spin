@@ -16,7 +16,8 @@ import {
   sendPresenceHeartbeat,
   setPlayerReady,
   subscribeCoupleRoom,
-  subscribeRoomGame,
+  subscribeRoomEvents,
+  extractGameFromEvent,
   type CoupleRoom,
   type RoomRole,
 } from '../utils/coupleRoom';
@@ -47,9 +48,11 @@ export function useCoupleRoom() {
         setActiveDisplayCode(null);
       }
     });
-    const unsubEvents = subscribeRoomGame(activeRoomId, (game, version) => {
+    const unsubEvents = subscribeRoomEvents(activeRoomId, 0, event => {
+      const game = extractGameFromEvent(event);
+      if (!game) return;
       remoteGameRef.current = game;
-      setLastEventVersion(version);
+      setLastEventVersion(event.version);
     });
 
     return () => {

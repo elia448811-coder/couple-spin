@@ -33,7 +33,7 @@
     "set:admin-password": "node scripts/set-admin-password.mjs",
     "send:admin-reset": "node scripts/send-admin-reset-email.mjs",
     "export:questions": "node scripts/export-questions.mjs",
-    "deploy:firestore": "node scripts/deploy-firestore.mjs",
+    "deploy:hosting": "firebase deploy --only hosting --project double-game-dd845",
     "prebuild": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {

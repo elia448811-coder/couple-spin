@@ -1,23 +1,34 @@
 import { accountLocal } from './accountStorage';
 import type { GameState } from '../types/game';
-import { ensureFirebaseApp, getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
-import { ensureAnonAuth } from './cloudSync';
+import { isValidRemoteGameState } from '../../shared/game-state-schema.mjs';
+import { isValidRoomEventPayload, MAX_PAYLOAD_BYTES } from '../../shared/room-event.mjs';
+export { isValidRemoteGameState } from '../../shared/game-state-schema.mjs';
+import { getFirebaseAuth, getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
 import { captureError, captureEvent } from './monitoring';
 import { checkJoinRateLimit, recordJoinFailure, resetJoinRateLimit } from './roomJoinRateLimit';
+import { gameSyncData } from './gameSyncData';
+import { gameApiPath } from './gameApi';
 
 const ROOM_ID_KEY = 'couple-spin-room-id';
 const ROOM_CODE_KEY = 'couple-spin-room-code';
 const ROLE_KEY = 'couple-spin-room-role';
 
+export const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 export const PRESENCE_TIMEOUT_MS = 60_000;
 export const HEARTBEAT_INTERVAL_MS = 25_000;
+export const SNAPSHOT_EVERY_N_EVENTS = 5;
 export const MAX_PLAYER_NAME_LEN = 32;
 export const DISPLAY_CODE_LEN = 8;
-export const MAX_EVENT_PAYLOAD_BYTES = 120_000;
+export const MAX_EVENT_PAYLOAD_BYTES = MAX_PAYLOAD_BYTES;
 
 export type RoomRole = 'host' | 'partner';
 export type RoomStatus = 'waiting' | 'lobby' | 'playing' | 'ended';
-export type RoomEventType = 'GAME_STARTED' | 'GAME_SNAPSHOT' | 'GAME_ENDED';
+export type RoomEventType =
+  | 'PLAYER_READY'
+  | 'GAME_STARTED'
+  | 'GAME_SNAPSHOT'
+  | 'GAME_ENDED'
+  | 'TURN_CHANGED';
 
 export type RoomPlayer = {
   uid: string;
@@ -50,6 +61,15 @@ export type CoupleRoom = {
   partnerLastSeenMs: number;
 };
 
+export type RoomGameEvent = {
+  id: string;
+  type: RoomEventType;
+  version: number;
+  createdBy: string;
+  createdAtMs: number;
+  payload: Record<string, unknown>;
+};
+
 export type StoredRoom = { roomId: string; displayCode: string; role: RoomRole };
 
 function canUseRooms(): boolean {
@@ -58,35 +78,17 @@ function canUseRooms(): boolean {
 
 /** Rooms require a real (non-anonymous) signed-in account. */
 async function ensureRoomAuth() {
-  const user = await ensureAnonAuth();
+  const auth = await getFirebaseAuth();
+  if (!auth) return null;
+  await auth.authStateReady();
+  const user = auth.currentUser;
   if (!user || user.isAnonymous || !user.email) return null;
   return user;
 }
 
-function normalizeDisplayCode(code: string): string {
-  return code.replace(/\D/g, '').slice(0, DISPLAY_CODE_LEN);
-}
-
-async function assertJoinGuard(): Promise<{ ok: boolean; error?: string }> {
-  if (typeof fetch === 'undefined') return { ok: true };
-  try {
-    const res = await fetch('/api/join-guard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: '{}',
-    });
-    if (res.status === 429) return { ok: false, error: 'join_rate_limited' };
-    // Missing API in local/static hosts → continue; other layers still apply.
-    return { ok: true };
-  } catch {
-    return { ok: true };
-  }
-}
-
 /** Strip heavy / non-essential fields before pushing over the wire. */
 export function sanitizeGameForSync(game: GameState): GameState {
-  return {
+  return gameSyncData({
     ...game,
     usedTaskIds: Array.isArray(game.usedTaskIds) ? game.usedTaskIds.slice(-200) : [],
     sessionNewAchievements: Array.isArray(game.sessionNewAchievements)
@@ -95,7 +97,7 @@ export function sanitizeGameForSync(game: GameState): GameState {
     unlockedAchievements: Array.isArray(game.unlockedAchievements)
       ? game.unlockedAchievements.slice(-40)
       : [],
-  };
+  });
 }
 
 function clampName(name: string, fallback: string): string {
@@ -136,11 +138,11 @@ export function getStoredRoom(): StoredRoom | null {
 }
 
 function isExpired(room: CoupleRoom): boolean {
-  return Date.now() > room.expiresAtMs;
+  return Date.now() >= room.expiresAtMs;
 }
 
 function parseRoom(roomId: string, raw: Record<string, unknown>): CoupleRoom {
-  const displayCode = String(raw.displayCode ?? raw.code ?? (/^[0-9]{8}$/.test(roomId) ? roomId : ''));
+  const displayCode = String(raw.displayCode ?? raw.code ?? '');
   return {
     roomId,
     displayCode,
@@ -204,60 +206,103 @@ export function bothPlayersReady(room: CoupleRoom | null): boolean {
   return room.hostReady && room.partnerReady;
 }
 
-type AccessResult = { ok: boolean; roomId?: string; error?: string };
+type RoomCommandResult = { ok: boolean; roomId?: string; version?: number; error?: string };
 
-async function requestRoomAccess(data: Record<string, string>): Promise<AccessResult> {
-  const app = await ensureFirebaseApp();
-  if (!app) return { ok: false, error: 'firebase_not_configured' };
-  if (!await ensureRoomAuth()) return { ok: false, error: 'auth_failed' };
-  const { getFunctions, httpsCallable } = await import('firebase/functions');
-  const call = httpsCallable<Record<string, string>, AccessResult>(getFunctions(app), 'coupleRoomAccess');
-  return (await call(data)).data;
+async function roomCommand(
+  user: NonNullable<Awaited<ReturnType<typeof ensureRoomAuth>>>,
+  body: Record<string, unknown>,
+): Promise<RoomCommandResult> {
+  const response = await fetch(gameApiPath('rooms'), {
+    method: 'POST', credentials: 'same-origin', redirect: 'error',
+    headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json() as RoomCommandResult;
+  if (!response.ok || result.ok !== true) return { ok: false, error: result.error };
+  return result;
 }
 
-async function openRoom(data: Record<string, string>): Promise<{ ok: boolean; room?: CoupleRoom; error?: string }> {
+async function enterRoom(
+  action: 'create' | 'join',
+  name: string,
+  fields: { eveningTitle: string } | { code: string },
+): Promise<{ ok: boolean; room?: CoupleRoom; error?: string }> {
+  if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
   try {
-    const result = await requestRoomAccess(data);
-    if (!result.ok || !result.roomId) return { ok: false, error: result.error ?? 'sync_failed' };
     const user = await ensureRoomAuth();
     const db = await getFirestoreDb();
     if (!user || !db) return { ok: false, error: 'auth_failed' };
+    const result = await roomCommand(user, { action, name, ...fields });
+    if (!result.ok || typeof result.roomId !== 'string') {
+      if (action === 'join' && result.error === 'room_not_found') recordJoinFailure();
+      return { ok: false, error: result.error ?? `${action}_failed` };
+    }
     const { doc, getDocFromServer } = await import('firebase/firestore');
     const snap = await getDocFromServer(doc(db, 'rooms', result.roomId));
     if (!snap.exists()) return { ok: false, error: 'room_not_found' };
     const room = parseRoom(snap.id, snap.data());
-    if (room.hostUid !== user.uid && room.partnerUid !== user.uid) return { ok: false, error: 'permission_denied' };
     writeStored(room.roomId, room.displayCode, room.hostUid === user.uid ? 'host' : 'partner');
-    captureEvent(data.action === 'create' ? 'room_created' : 'room_joined', { roomId: room.roomId });
-    void import('./userProfile').then((m) => m.ensureUserProfile({ displayName: data.name, lastRoomId: room.roomId }));
+    if (action === 'join') resetJoinRateLimit();
+    captureEvent(action === 'join' ? 'room_joined' : 'room_created', { roomId: room.roomId });
+    void import('./userProfile').then((m) => m.ensureUserProfile({ displayName: name, lastRoomId: room.roomId }));
     return { ok: true, room };
   } catch (error) {
-    captureError(error, { action: data.action });
-    return { ok: false, error: data.action === 'create' ? 'create_failed' : 'join_failed' };
+    captureError(error, { action: action === 'join' ? 'joinCoupleRoom' : 'createCoupleRoom' });
+    return { ok: false, error: `${action}_failed` };
   }
 }
 
-export async function createCoupleRoom(hostName: string, eveningTitle = 'ערב זוגי') {
-  return openRoom({ action: 'create', name: clampName(hostName, 'שחקן 1'), title: eveningTitle.trim().slice(0, 64) || 'ערב זוגי' });
+export function createCoupleRoom(hostName: string, eveningTitle = 'ערב זוגי') {
+  return enterRoom('create', clampName(hostName, 'שחקן 1'), { eveningTitle: eveningTitle.slice(0, 64) });
 }
 
 export async function joinCoupleRoom(code: string, partnerName: string) {
-  const normalized = normalizeDisplayCode(code);
-  if (normalized.length !== DISPLAY_CODE_LEN) return { ok: false, error: 'invalid_code' };
-  if (!checkJoinRateLimit().allowed) return { ok: false, error: 'join_rate_limited' };
-  const ipGuard = await assertJoinGuard();
-  if (!ipGuard.ok) return { ok: false, error: 'join_rate_limited' };
-  const result = await openRoom({ action: 'join', code: normalized, name: clampName(partnerName, 'שחקן 2') });
-  if (result.ok) resetJoinRateLimit();
-  else if (result.error === 'room_not_found' || result.error === 'room_full') recordJoinFailure();
-  return result;
+  if (!checkJoinRateLimit().allowed) return { ok: false, room: undefined, error: 'join_rate_limited' };
+  const normalized = code.trim().replace(/[ -]/g, '');
+  if (!/^[0-9]{8}$/.test(normalized)) return { ok: false, room: undefined, error: 'invalid_code' };
+  return enterRoom('join', clampName(partnerName, 'שחקן 2'), { code: normalized });
 }
 
 export async function leaveCoupleRoom(): Promise<void> {
   const stored = readStored();
-  if (stored && canUseRooms()) {
-    const result = await requestRoomAccess({ action: 'leave', roomId: stored.roomId });
-    if (!result.ok && result.error !== 'auth_failed') throw new Error(result.error ?? 'sync_failed');
+  if (!stored || !canUseRooms()) {
+    clearStoredRoom();
+    return;
+  }
+  const user = await ensureRoomAuth();
+  const db = await getFirestoreDb();
+  if (!user || !db) {
+    clearStoredRoom();
+    return;
+  }
+
+  if (stored.role === 'host') {
+    const result = await roomCommand(user, { action: 'close', roomId: stored.roomId });
+    if (!result.ok && result.error !== 'room_not_found') throw new Error(result.error ?? 'sync_failed');
+    clearStoredRoom();
+    return;
+  }
+  const { doc, getDoc, serverTimestamp, setDoc } = await import('firebase/firestore');
+  const roomRef = doc(db, 'rooms', stored.roomId);
+  const snap = await getDoc(roomRef);
+  if (snap.exists()) {
+    const room = parseRoom(stored.roomId, snap.data() as Record<string, unknown>);
+    if (room.partnerUid === user.uid) {
+      await setDoc(
+        roomRef,
+        {
+          partnerUid: null,
+          partnerName: null,
+          partnerReady: false,
+          partnerLastSeenMs: 0,
+          status: 'waiting',
+          updatedAtMs: Date.now(),
+          updatedBy: user.uid,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
   }
   clearStoredRoom();
 }
@@ -284,59 +329,51 @@ export async function setPlayerReady(roomId: string, ready: boolean): Promise<vo
       ? { hostReady: ready, hostLastSeenMs: now, updatedBy: user.uid }
       : { partnerReady: ready, partnerLastSeenMs: now, updatedBy: user.uid };
   await patchCoupleRoom(roomId, patch);
+  // Readiness is already stored in the room. Updating it must not also race
+  // both phones against the shared version used for game snapshots.
 }
 
 export async function sendPresenceHeartbeat(roomId: string): Promise<void> {
   const stored = readStored();
-  const user = await ensureRoomAuth();
-  if (!stored || !user) return;
+  if (!stored) return;
   const now = Date.now();
   const patch =
     stored.role === 'host' ? { hostLastSeenMs: now } : { partnerLastSeenMs: now };
-  await patchCoupleRoom(roomId, { ...patch, updatedBy: user.uid });
+  await patchCoupleRoom(roomId, patch);
 }
 
 export async function appendRoomEvent(
   roomId: string,
   type: RoomEventType,
-  payload = '',
+  payload: Record<string, unknown> = {},
+  eventId = crypto.randomUUID(),
 ): Promise<{ ok: boolean; version?: number; error?: string }> {
-  const user = await ensureRoomAuth();
-  const db = await getFirestoreDb();
-  if (!user || !db) return { ok: false, error: 'auth_failed' };
-  if (new TextEncoder().encode(payload).length > MAX_EVENT_PAYLOAD_BYTES) return { ok: false, error: 'sync_failed' };
-  const { doc, runTransaction, serverTimestamp, Timestamp } = await import('firebase/firestore');
-  const roomRef = doc(db, 'rooms', roomId);
+  if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
   try {
-    const version = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(roomRef);
-      if (!snap.exists()) throw new Error('room_not_found');
-      const room = parseRoom(roomId, snap.data());
-      if (isExpired(room)) throw new Error('room_expired');
-      if (room.hostUid !== user.uid || !room.partnerUid) throw new Error('permission_denied');
-      if (type === 'GAME_STARTED' && !bothPlayersReady(room)) throw new Error('not_ready');
-      const nextVersion = room.version + 1;
-      if (nextVersion > 2048) throw new Error('room_event_limit');
-      tx.set(doc(roomRef, 'sync', 'current'), {
-        type, version: nextVersion, payload, createdAt: serverTimestamp(),
-        coupleSpinExpireAt: Timestamp.fromMillis(room.expiresAtMs),
-      });
-      tx.update(roomRef, {
-        version: nextVersion, updatedBy: user.uid, updatedAtMs: Date.now(), updatedAt: serverTimestamp(),
-        ...(type === 'GAME_STARTED' ? { status: 'playing' } : {}),
-        ...(type === 'GAME_ENDED' ? { status: 'ended' } : {}),
-      });
-      return nextVersion;
-    });
-    return { ok: true, version };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'sync_failed' };
+    const user = await ensureRoomAuth();
+    if (!user) return { ok: false, error: 'auth_failed' };
+    if (new TextEncoder().encode(JSON.stringify(payload)).length > MAX_EVENT_PAYLOAD_BYTES) {
+      return { ok: false, error: 'sync_failed' };
+    }
+    const command = { action: 'event', roomId, eventId, type, payload };
+    // A lost response may follow a committed transaction. Reuse the ID on retry.
+    let result: RoomCommandResult;
+    try { result = await roomCommand(user, command); }
+    catch { result = await roomCommand(user, command); }
+    return result.ok && Number.isSafeInteger(result.version) ? { ok: true, version: result.version }
+      : { ok: false, error: result.error ?? 'sync_failed' };
+  } catch {
+    return { ok: false, error: 'sync_failed' };
   }
 }
 
 export async function pushRoomGameState(roomId: string, game: GameState): Promise<void> {
-  const state = sanitizeGameForSync(game);
-  await appendRoomEvent(roomId, state.screen === 'end' ? 'GAME_ENDED' : 'GAME_SNAPSHOT', JSON.stringify(state));
+  const slim = sanitizeGameForSync(game);
+  await appendRoomEvent(roomId, slim.screen === 'end' ? 'GAME_ENDED' : 'GAME_SNAPSHOT', {
+    gameState: slim,
+    screen: slim.screen,
+    sparkStreak: slim.stats.streak,
+  });
 }
 
 export function subscribeCoupleRoom(
@@ -348,82 +385,103 @@ export function subscribeCoupleRoom(
     onRoom(null);
     return () => {};
   }
-  let active = true;
   let unsubscribe = () => {};
+  let cancelled = false;
   void (async () => {
     const db = await getFirestoreDb();
-    if (!db || !active) return;
+    if (cancelled) return;
+    if (!db) {
+      onRoom(null);
+      return;
+    }
     const { doc, onSnapshot } = await import('firebase/firestore');
-    if (!active) return;
+    if (cancelled) return;
     unsubscribe = onSnapshot(doc(db, 'rooms', roomId), { includeMetadataChanges: true }, (snap) => {
-      if (snap.metadata.fromCache) return;
-      if (!snap.exists()) return onRoom(null);
-      const room = parseRoom(roomId, snap.data());
-      onRoom(isExpired(room) ? null : { ...room, displayCode: room.displayCode || displayCode });
-    }, () => onRoom(null));
+      if (!snap.exists()) {
+        // Transaction reads do not populate the cache. Wait for the server before
+        // treating an initially empty cache as a deleted room.
+        if (!snap.metadata.fromCache) onRoom(null);
+        return;
+      }
+      const data = snap.data() as Record<string, unknown>;
+      // A transaction can leave only its updated fields in the local cache.
+      // That partial document has no expiry or identity until the server replies.
+      if (typeof data.expiresAtMs !== 'number' || typeof data.hostUid !== 'string') return;
+      const room = parseRoom(roomId, data);
+      if (isExpired(room)) {
+        onRoom(null);
+        return;
+      }
+      onRoom({ ...room, displayCode: room.displayCode || displayCode, code: room.displayCode || displayCode });
+    }, (error) => {
+      if (cancelled) return;
+      if (error.code === 'permission-denied') onRoom(null);
+      else captureError(error, { action: 'subscribeCoupleRoom' });
+    });
   })();
-  return () => { active = false; unsubscribe(); };
+  return () => { cancelled = true; unsubscribe(); };
 }
 
-export function readSyncedGame(raw: Record<string, unknown>, fromVersion: number): { game: GameState; version: number } | null {
-  if (raw.type !== 'GAME_SNAPSHOT' && raw.type !== 'GAME_ENDED') return null;
-  if (typeof raw.version !== 'number' || !Number.isInteger(raw.version) || raw.version <= fromVersion || raw.version > 2048) return null;
-  if (typeof raw.payload !== 'string' || new TextEncoder().encode(raw.payload).length > MAX_EVENT_PAYLOAD_BYTES) return null;
-  try {
-    const game: unknown = JSON.parse(raw.payload);
-    return isValidRemoteGameState(game) ? { game, version: raw.version } : null;
-  } catch {
-    return null;
-  }
-}
-
-export function subscribeRoomGame(roomId: string, onGame: (game: GameState | null, version: number) => void): () => void {
-  let active = true;
+export function subscribeRoomEvents(
+  roomId: string,
+  fromVersion: number,
+  onEvent: (event: RoomGameEvent) => void,
+): () => void {
+  if (!canUseRooms()) return () => {};
   let unsubscribe = () => {};
+  let cancelled = false;
   void (async () => {
     const db = await getFirestoreDb();
-    if (!db || !active) return;
-    const { doc, onSnapshot } = await import('firebase/firestore');
-    if (!active) return;
-    let lastSeen = 0;
-    unsubscribe = onSnapshot(doc(db, 'rooms', roomId, 'sync', 'current'), { includeMetadataChanges: true }, (snap) => {
-      if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
-      if (!snap.exists()) return onGame(null, 0);
-      const state = readSyncedGame(snap.data(), lastSeen);
-      if (!state) return;
-      lastSeen = state.version;
-      onGame(state.game, state.version);
-    }, () => onGame(null, 0));
+    if (cancelled) return;
+    if (!db) return;
+    const { collection, limitToLast, onSnapshot, orderBy, query, where } = await import('firebase/firestore');
+    if (cancelled) return;
+    // Game snapshots are self-contained. On reconnect fetch the most recent window
+    // after the consumed cursor, then keep listening as the window moves forward.
+    const q = query(collection(db, 'rooms', roomId, 'gameEvents'), where('version', '>', fromVersion),
+      orderBy('version', 'asc'), limitToLast(32));
+    let lastSeen = fromVersion;
+    unsubscribe = onSnapshot(q, (snap) => {
+      for (const change of snap.docChanges()) {
+        if (change.type !== 'added' && change.type !== 'modified') continue;
+        const raw = change.doc.data() as Record<string, unknown>;
+        if (typeof raw.version !== 'number' || !Number.isSafeInteger(raw.version) || raw.version <= lastSeen) continue;
+        const version = raw.version;
+        const event: RoomGameEvent = {
+          id: change.doc.id,
+          type: raw.type as RoomEventType,
+          version,
+          createdBy: raw.createdBy as string,
+          createdAtMs: raw.createdAtMs as number,
+          payload: raw.payload as Record<string, unknown>,
+        };
+        if (!isValidRoomEvent(event)) continue;
+        lastSeen = version;
+        onEvent(event);
+      }
+    }, (error) => {
+      // Losing membership during leave/expiry closes the listener normally.
+      if (!cancelled && error.code !== 'permission-denied') captureError(error, { action: 'subscribeRoomEvents' });
+    });
   })();
-  return () => { active = false; unsubscribe(); };
+  return () => { cancelled = true; unsubscribe(); };
 }
 
 export function partnerConnected(room: CoupleRoom | null): boolean {
   return Boolean(room?.partnerUid && room.partnerName);
 }
 
-const VALID_SCREENS = new Set([
-  'welcome',
-  'tutorial',
-  'setup',
-  'mode-select',
-  'level-select',
-  'dice-roll',
-  'game',
-  'end',
-  'settings',
-]);
+export function isValidRoomEvent(event: RoomGameEvent): boolean {
+  if (!event || typeof event.id !== 'string' || !event.id || typeof event.createdBy !== 'string' || !event.createdBy ||
+      !Number.isSafeInteger(event.version) || event.version < 1 ||
+      !Number.isSafeInteger(event.createdAtMs) || event.createdAtMs < 0 ||
+      !event.payload || typeof event.payload !== 'object' || Array.isArray(event.payload)) return false;
+  return isValidRoomEventPayload(event.type, event.payload);
+}
 
-/** Lightweight schema guard before applying a remote snapshot. */
-export function isValidRemoteGameState(value: unknown): value is GameState {
-  if (!value || typeof value !== 'object') return false;
-  const g = value as Record<string, unknown>;
-  if (typeof g.screen !== 'string' || !VALID_SCREENS.has(g.screen)) return false;
-  if (!Array.isArray(g.scores) || g.scores.length !== 2) return false;
-  if (typeof g.scores[0] !== 'number' || typeof g.scores[1] !== 'number') return false;
-  if (typeof g.playerOneName !== 'string' || typeof g.playerTwoName !== 'string') return false;
-  if (g.currentPlayerIndex !== 0 && g.currentPlayerIndex !== 1) return false;
-  if (!Array.isArray(g.usedTaskIds)) return false;
-  if (!g.stats || typeof g.stats !== 'object') return false;
-  return true;
+export function extractGameFromEvent(event: RoomGameEvent): GameState | null {
+  if (event.type !== 'GAME_SNAPSHOT' && event.type !== 'GAME_ENDED') return null;
+  const state = event.payload?.gameState;
+  if (!isValidRemoteGameState(state)) return null;
+  return state;
 }

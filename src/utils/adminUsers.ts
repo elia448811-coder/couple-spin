@@ -1,7 +1,7 @@
-import { collection, deleteField, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { getFirebaseAuth, getFirestoreDb, isFirebaseConfigured, readFirebaseWebConfig } from '../lib/firebase';
+import { collection, deleteField, doc, getDoc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
+import { getFirebaseAuth, getFirestoreDb } from '../lib/firebase';
 import { assertAdmin, isSoleAdminUid } from './admin';
-import { isValidUsername, normalizeUsername, usernameToEmail } from './userAuth';
+import { createRegisteredAccount } from './registration';
 
 function assertNotSoleAdminTarget(uid: string, action: string): void {
   if (isSoleAdminUid(uid)) {
@@ -130,51 +130,8 @@ export async function createAppUserByAdmin(input: {
   displayName?: string;
   approved?: boolean;
 }): Promise<{ uid: string; username: string }> {
-  await assertAdmin();
-  if (!isFirebaseConfigured()) throw new Error('Firebase לא מוגדר');
-  const username = normalizeUsername(input.username);
-  if (!isValidUsername(username)) {
-    throw new Error('שם משתמש: 3–24 תווים, אותיות/מספרים/_ בלבד.');
-  }
-  if (input.password.length < 6) throw new Error('הסיסמה חייבת לפחות 6 תווים.');
-
-  const config = readFirebaseWebConfig();
-  if (!config) throw new Error('Firebase לא מוגדר');
-
-  const { initializeApp, deleteApp } = await import('firebase/app');
-  const { createUserWithEmailAndPassword, getAuth, signOut, updateProfile } = await import('firebase/auth');
-
-  const secondary = initializeApp(config, `admin-create-${Date.now()}`);
-  try {
-    const secondaryAuth = getAuth(secondary);
-    const email = usernameToEmail(username);
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, input.password);
-    const name = (input.displayName?.trim() || username).slice(0, 32);
-    await updateProfile(cred.user, { displayName: name });
-
-    const db = await getFirestoreDb();
-    if (!db) throw new Error('Firestore לא זמין');
-    const now = Date.now();
-    const approved = input.approved !== false;
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      uid: cred.user.uid,
-      username,
-      displayName: name,
-      partnerDisplayName: 'שחקן 2',
-      avatar: '💜',
-      createdAtMs: now,
-      lastSeenMs: now,
-      updatedAtMs: now,
-      schemaVersion: 1,
-      lastRoomId: null,
-      gamesPlayed: 0,
-      approved,
-      banned: false,
-    });
-
-    await signOut(secondaryAuth);
-    return { uid: cred.user.uid, username };
-  } finally {
-    await deleteApp(secondary).catch(() => undefined);
-  }
+  const uid = await assertAdmin();
+  const user = (await getFirebaseAuth())?.currentUser;
+  if (user?.uid !== uid) throw new Error('אין הרשאת מנהל.');
+  return createRegisteredAccount(input, await user.getIdToken());
 }

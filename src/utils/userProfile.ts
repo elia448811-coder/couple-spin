@@ -107,6 +107,8 @@ export async function ensureUserProfile(
   const ref = doc(db, 'users', user.uid);
   const snap = await getDoc(ref);
   const existing = snap.exists() ? parseProfile(user.uid, snap.data() as Record<string, unknown>) : null;
+  if (existing && !isSoleAdminUid(user.uid) &&
+      (snap.get('approved') !== true || (snap.get('banned') ?? false) !== false)) return existing;
   const base = existing ?? defaultProfile(user.uid);
   const now = Date.now();
 

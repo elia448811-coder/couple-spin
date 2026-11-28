@@ -40,13 +40,13 @@ npm run test:system
 
 ### Account approval and legacy session storage
 
-Accounts must have an explicit administrator approval. Older profiles without an approval appear in the existing pending queue. Review them individually before releasing the updated Firestore rules. Deploy the reviewed rules to the shared Firebase project separately from the web deployment.
+Accounts must have an explicit administrator approval. Older profiles without an approval appear in the existing pending queue. Review them individually before releasing the updated Firestore rules. The double-game project owns the shared production rules.
 
 The active game signs in through Firebase. The optional shared-password API on Vercel and Cloudflare requires `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` on each production adapter. Point both at the same store when they accept the same tokens. If the store is unavailable, the legacy API returns HTTP 503. The room join guard retains per-instance throttling when shared storage is unavailable.
 
 The administrator signs in with the existing email alias. Privileged operations require the pinned Firebase UID. For a new Firebase installation, an authorized operator can provision that UID with `set:admin-password` before seeding site settings. When registration is closed, the rules also reject new self-service profiles.
 
-Room creation and admission use the `coupleRoomAccess` callable. Follow the release order for the Functions codebase, Firestore rules and TTL policies, and the web client. [Room service rollout](functions/README.md)
+The production client at https://couple-spin-dd845.web.app uses the shared double-game room and registration API. Publish the dedicated Firebase Hosting site with `npm run deploy:hosting`. [Firebase release and verification](functions/README.md)
 
 Before releasing the profile rules, install the dependencies with `npm ci --prefix functions`. Set `GCLOUD_PROJECT` to the reviewed Firebase project and run `node functions/scripts/migrate-admin-notes.mjs` with operator credentials to preview the migration. Add `--apply` to move old notes into `adminUserNotes`. Each move is transactional. Resolve any reported conflicts before rollout. Profiles containing a nonempty legacy note are readable only by the administrator until migrated.
 

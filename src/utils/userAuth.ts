@@ -1,6 +1,7 @@
+import { createRegisteredAccount } from './registration';
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
 import { bindStorageAccount } from './accountStorage';
-import { isSoleAdminEmail, SOLE_ADMIN_EMAIL } from './admin';
+import { isSoleAdminEmail, isSoleAdminUid, SOLE_ADMIN_EMAIL } from './admin';
 import { ensureUserProfile } from './userProfile';
 
 /** Synthetic domain — Firebase Email/Password under the hood; users never see it. */
@@ -156,43 +157,16 @@ export async function registerWithUsername(
 ): Promise<AuthResult> {
   if (!isFirebaseConfigured()) return { ok: false, error: 'Firebase לא מוגדר.' };
   if (password.length < 6) return { ok: false, error: 'הסיסמה חייבת לפחות 6 תווים.' };
-  if (!isValidUsername(username)) return { ok: false, error: 'להרשמה יש לבחור שם משתמש בן 3–24 תווים.' };
 
-  const resolved = resolveAuthEmail(username);
-  if (!resolved.ok) return { ok: false, error: resolved.error };
-  const { email, label } = resolved;
+  if (!isValidUsername(username)) return { ok: false, error: 'שם משתמש: 3–24 תווים, אותיות/מספרים/_ בלבד.' };
 
   try {
     const auth = await getFirebaseAuth();
     if (!auth) return { ok: false, error: 'Firebase לא זמין.' };
 
-    const {
-      createUserWithEmailAndPassword,
-      EmailAuthProvider,
-      linkWithCredential,
-      updateProfile,
-    } = await import('firebase/auth');
-
-    let user = auth.currentUser;
-    if (user?.isAnonymous) {
-      const credential = EmailAuthProvider.credential(email, password);
-      const linked = await linkWithCredential(user, credential);
-      user = linked.user;
-    } else if (!user) {
-      const created = await createUserWithEmailAndPassword(auth, email, password);
-      user = created.user;
-    } else if (user.email) {
-      return { ok: false, error: 'כבר מחוברים. התנתקו קודם.' };
-    } else {
-      const created = await createUserWithEmailAndPassword(auth, email, password);
-      user = created.user;
-    }
-
-    const name = (displayName?.trim() || label).slice(0, 32);
-    await updateProfile(user, { displayName: name });
-    await ensureUserProfile({ displayName: name, username: label });
-
-    return { ok: true, uid: user.uid, username: label, email: user.email };
+    if (auth.currentUser && !auth.currentUser.isAnonymous) return { ok: false, error: 'כבר מחוברים. התנתקו קודם.' };
+    await createRegisteredAccount({ username, password, displayName });
+    return await signInWithUsername(username, password);
   } catch (error) {
     return { ok: false, error: mapAuthError(error) };
   }
@@ -209,8 +183,12 @@ export async function signInWithUsername(username: string, password: string): Pr
   try {
     const auth = await getFirebaseAuth();
     if (!auth) return { ok: false, error: 'Firebase לא זמין.' };
-    const { signInWithEmailAndPassword } = await import('firebase/auth');
+    const { signInWithEmailAndPassword, signOut } = await import('firebase/auth');
     const cred = await signInWithEmailAndPassword(auth, email, password);
+    if (isSoleAdminEmail(email) && !isSoleAdminUid(cred.user.uid)) {
+      await signOut(auth);
+      return { ok: false, error: 'חשבון המנהל אינו תואם להגדרות המערכת.' };
+    }
     await ensureUserProfile({
       displayName: cred.user.displayName || label,
       username: label,

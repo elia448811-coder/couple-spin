@@ -77,7 +77,7 @@ jobs:
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
           export PATH="$JAVA_HOME/bin:$PATH"
-          npx --yes firebase-tools@15.27.0 emulators:exec --only firestore --project demo-couple-spin "node functions/scripts/test-profile-rules.mjs && node functions/scripts/test-rooms.mjs"
+          npx --yes firebase-tools@15.27.0 emulators:exec --config firebase.emulator.json --only firestore --project demo-couple-spin "node functions/scripts/test-profile-rules.mjs && node functions/scripts/test-rooms.mjs"
 
   e2e:
     needs: quality

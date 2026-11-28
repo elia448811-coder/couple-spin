@@ -318,7 +318,7 @@ export async function pushUserData(): Promise<{ ok: boolean; error?: string }> {
   emitSync({ status: 'syncing', lastError: null });
   try {
     const { doc, getDoc, serverTimestamp, setDoc } = await import('firebase/firestore');
-    const ref = doc(target.db, 'users', target.uid, 'data', 'bundle');
+    const ref = doc(target.db, 'users', target.uid, 'coupleSpinBackup', 'bundle');
     const existing = await getDoc(ref);
     if (!target.current()) return { ok: false, error: 'sync_disabled' };
     const bundle = localBundle();
@@ -346,7 +346,7 @@ export async function pullUserData(): Promise<{ ok: boolean; bundle?: CloudBundl
   emitSync({ status: 'syncing', lastError: null });
   try {
     const { doc, getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(target.db, 'users', target.uid, 'data', 'bundle'));
+    const snap = await getDoc(doc(target.db, 'users', target.uid, 'coupleSpinBackup', 'bundle'));
     if (!target.current()) return { ok: false, error: 'sync_disabled' };
     if (!snap.exists()) {
       emitSync({ status: 'idle', lastSyncMs: Date.now() });
@@ -394,7 +394,7 @@ export async function pushCloudSnapshot(game: GameState): Promise<void> {
   try {
     const { doc, serverTimestamp, setDoc } = await import('firebase/firestore');
     if (!target.current()) return;
-    await setDoc(doc(target.db, 'users', target.uid, 'data', 'activeGame'), {
+    await setDoc(doc(target.db, 'users', target.uid, 'coupleSpinBackup', 'activeGame'), {
       payload: encodeBackup(game), updatedAtMs: Date.now(), updatedAt: serverTimestamp(),
     });
   } catch {
@@ -407,7 +407,7 @@ export async function pullCloudSnapshot(): Promise<GameState | null> {
   if (!target) return null;
   try {
     const { doc, getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(target.db, 'users', target.uid, 'data', 'activeGame'));
+    const snap = await getDoc(doc(target.db, 'users', target.uid, 'coupleSpinBackup', 'activeGame'));
     if (!snap.exists() || !target.current()) return null;
     const data = snap.data();
     const game = ('payload' in data ? decodeBackup(data) : data.game) as GameState | undefined;

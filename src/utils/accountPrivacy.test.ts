@@ -71,11 +71,11 @@ it('saves custom content locally until this account opts in, then backs up the d
   sync.setCloudConsent(true);
   expect((await sync.pushUserData()).ok).toBe(true);
   const [path, value] = firebase.setDoc.mock.calls[0]!;
-  expect(path).toBe('users/alice/data/bundle');
+  expect(path).toBe('users/alice/coupleSpinBackup/bundle');
   expect(Object.keys(value).sort()).toEqual(['payload', 'updatedAt', 'updatedAtMs']);
   expect(JSON.parse(value.payload).customContent[0].title).toBe('My own task');
   await sync.pushCloudSnapshot({ screen: 'game' } as GameState);
-  expect(firebase.setDoc.mock.calls[1]?.[0]).toBe('users/alice/data/activeGame');
+  expect(firebase.setDoc.mock.calls[1]?.[0]).toBe('users/alice/coupleSpinBackup/activeGame');
 
   sync.scheduleCloudPush();
   const { setGuestMode } = await import('./privacy');
