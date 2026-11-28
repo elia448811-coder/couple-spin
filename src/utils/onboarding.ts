@@ -1,8 +1,9 @@
+import { accountLocal } from './accountStorage';
 const ONBOARDING_KEY = 'couple-spin-onboarding-done';
 
 export function hasCompletedOnboarding(): boolean {
   try {
-    return localStorage.getItem(ONBOARDING_KEY) === '1';
+    return accountLocal.getItem(ONBOARDING_KEY) === '1';
   } catch {
     return true;
   }
@@ -10,7 +11,7 @@ export function hasCompletedOnboarding(): boolean {
 
 export function markOnboardingComplete(): void {
   try {
-    localStorage.setItem(ONBOARDING_KEY, '1');
+    accountLocal.setItem(ONBOARDING_KEY, '1');
   } catch {
     /* ignore quota errors */
   }
@@ -18,7 +19,7 @@ export function markOnboardingComplete(): void {
 
 export function resetOnboarding(): void {
   try {
-    localStorage.removeItem(ONBOARDING_KEY);
+    accountLocal.removeItem(ONBOARDING_KEY);
   } catch {
     /* ignore */
   }

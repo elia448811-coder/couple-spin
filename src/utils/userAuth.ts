@@ -1,4 +1,5 @@
 import { getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase';
+import { bindStorageAccount } from './accountStorage';
 import { isSoleAdminEmail, SOLE_ADMIN_EMAIL } from './admin';
 import { ensureUserProfile } from './userProfile';
 
@@ -103,6 +104,7 @@ export async function getAuthUser() {
 
 export function subscribeAuth(listener: (user: AuthUserView | null) => void): () => void {
   let unsub = () => {};
+  let disposed = false;
   void (async () => {
     const auth = await getFirebaseAuth();
     if (!auth) {
@@ -110,7 +112,9 @@ export function subscribeAuth(listener: (user: AuthUserView | null) => void): ()
       return;
     }
     const { onAuthStateChanged } = await import('firebase/auth');
+    if (disposed) return;
     unsub = onAuthStateChanged(auth, (user) => {
+      if (!bindStorageAccount(user?.uid ?? null)) return;
       if (!user) {
         listener(null);
         return;
@@ -123,7 +127,7 @@ export function subscribeAuth(listener: (user: AuthUserView | null) => void): ()
       });
     });
   })();
-  return () => unsub();
+  return () => { disposed = true; unsub(); };
 }
 
 function resolveAuthEmail(identifier: string): { ok: true; email: string; label: string } | { ok: false; error: string } {
@@ -144,7 +148,7 @@ function resolveAuthEmail(identifier: string): { ok: true; email: string; label:
   return { ok: true, email: usernameToEmail(userName), label: userName };
 }
 
-/** Register with username (+ sole admin may use their email). */
+/** Public registration accepts usernames only. */
 export async function registerWithUsername(
   username: string,
   password: string,
@@ -152,6 +156,7 @@ export async function registerWithUsername(
 ): Promise<AuthResult> {
   if (!isFirebaseConfigured()) return { ok: false, error: 'Firebase לא מוגדר.' };
   if (password.length < 6) return { ok: false, error: 'הסיסמה חייבת לפחות 6 תווים.' };
+  if (!isValidUsername(username)) return { ok: false, error: 'להרשמה יש לבחור שם משתמש בן 3–24 תווים.' };
 
   const resolved = resolveAuthEmail(username);
   if (!resolved.ok) return { ok: false, error: resolved.error };
@@ -219,9 +224,12 @@ export async function signInWithUsername(username: string, password: string): Pr
 export async function signOutUser(): Promise<AuthResult> {
   try {
     const auth = await getFirebaseAuth();
-    if (!auth) return { ok: true };
+    const { cancelCloudSync } = await import('./cloudSync');
+    cancelCloudSync();
+    if (!auth) { bindStorageAccount(null); return { ok: true }; }
     const { signOut } = await import('firebase/auth');
     await signOut(auth);
+    bindStorageAccount(null);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: mapAuthError(error) };

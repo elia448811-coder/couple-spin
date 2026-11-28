@@ -72,3 +72,20 @@ export function parseTokenParts(token) {
 export function isLegacyAllowed(envFlag) {
   return envFlag === 'true' || envFlag === '1';
 }
+
+/** Resolve only explicitly configured, non-empty string signing keys. */
+export function verificationKey(kid, currentKid, currentSecret, rotationConfig) {
+  if (kid === currentKid && typeof currentSecret === 'string' && currentSecret) return currentSecret;
+  if (typeof rotationConfig !== 'string' || !rotationConfig) return null;
+
+  let keys;
+  try {
+    keys = rotationConfig.trim().startsWith('{')
+      ? JSON.parse(rotationConfig)
+      : Object.fromEntries(rotationConfig.split(',').map(pair => pair.split(/:(.+)/)).filter(([id, key]) => id && key));
+  } catch {
+    return null;
+  }
+  if (!Object.hasOwn(keys, kid)) return null;
+  return typeof keys[kid] === 'string' && keys[kid] ? keys[kid] : null;
+}

@@ -1,68 +1,48 @@
-import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
-import { join, relative, extname } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, extname, isAbsolute, join, relative, sep } from 'node:path';
 
-const root = process.cwd();
-const out = join(root, 'code.txt');
-const skipDirs = new Set(['node_modules', 'dist', '.git', '.vercel', '.cursor']);
-const skipFiles = new Set(['code.txt']);
-const allowExt = new Set([
-  '.ts',
-  '.tsx',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.cjs',
-  '.css',
-  '.html',
-  '.json',
-  '.toml',
-  '.yml',
-  '.yaml',
-  '.md',
-  '.txt',
-  '.bat',
-  '.ps1',
-  '.example',
-  '.nvmrc',
-]);
-const allowNames = new Set(['.gitignore', '.oxlintrc.json', '.nvmrc']);
-
-function walk(dir, files = []) {
-  for (const name of readdirSync(dir)) {
-    if (skipDirs.has(name)) continue;
-    const p = join(dir, name);
-    const st = statSync(p);
-    if (st.isDirectory()) {
-      walk(p, files);
-      continue;
-    }
-    const rel = relative(root, p).replaceAll('\\', '/');
-    if (skipFiles.has(name) || skipFiles.has(rel)) continue;
-    const ext = extname(name).toLowerCase();
-    if (!allowExt.has(ext) && !allowNames.has(name) && !name.endsWith('.example')) continue;
-    files.push(p);
+// Read indexed, regular Git blobs. Local edits, symlinks and untracked files
+// never supply bytes to the export, even if a working-tree path is replaced.
+const root = realpathSync(execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim());
+const options = { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 };
+const entries = execFileSync('git', ['ls-files', '--stage', '-z'], options).split('\0');
+const files = [];
+for (const entry of entries) {
+  const match = /^(?:100644|100755) ([0-9a-f]+) 0\t([\s\S]+)$/.exec(entry);
+  if (!match) continue;
+  const [, oid, path] = match;
+  const name = basename(path).toLowerCase();
+  if (/(?:^|\/)secrets-vault\//i.test(path) || /^(?:\.env(?:\..*)?|code\.txt)$/.test(name) ||
+      /service[-_]?account|firebase-adminsdk|credential|\.local(?:\.|$)/i.test(name)) continue;
+  if (!['.gitignore', '.nvmrc'].includes(name) &&
+      !/^\.(?:tsx?|jsx?|mjs|cjs|css|html|json|toml|ya?ml|md|txt|bat|ps1|rules)$/.test(extname(name))) continue;
+  files.push({ oid, path });
+}
+// Ignore rules can change after a file was staged, or a file can be force-added.
+const check = spawnSync('git', ['check-ignore', '--no-index', '--stdin', '-z'], {
+  ...options, input: files.map(({ path }) => path + '\0').join(''),
+});
+if (check.error || ![0, 1].includes(check.status)) throw new Error('Could not evaluate Git ignore rules');
+const ignored = new Set(check.stdout.split('\0'));
+const parts = ['ספין זוגי / Couple Spin'];
+let count = 0;
+for (const { oid, path } of files) {
+  if (ignored.has(path)) continue;
+  const content = execFileSync('git', ['cat-file', 'blob', oid], options);
+  if (/-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|"type"\s*:\s*"service_account"|"private_key"\s*:\s*"[^"]+"/i.test(content)) {
+    throw new Error('Export stopped because a tracked file contains credential material');
   }
-  return files;
+  parts.push('', `████ FILE: ${path} ████`, content.replace(/\r\n/g, '\n'));
+  count++;
 }
 
-const files = walk(root).sort((a, b) => a.localeCompare(b));
-const parts = [];
-parts.push('ספין זוגי / Couple Spin — ייצוא קוד מלא');
-parts.push('מקור: F:\\GAMED');
-parts.push(`קבצים: ${files.length}`);
-parts.push('='.repeat(72));
-
-for (const p of files) {
-  const rel = relative(root, p).replaceAll('\\', '/');
-  let content = readFileSync(p, 'utf8');
-  parts.push('');
-  parts.push(`████ FILE: ${rel} ████`);
-  parts.push('-'.repeat(72));
-  parts.push(content.replace(/\r\n/g, '\n'));
+const temp = realpathSync(tmpdir());
+const rel = relative(root, temp);
+if (!(isAbsolute(rel) || rel === '..' || rel.startsWith('..' + sep))) {
+  throw new Error('Choose a temporary directory outside the repository');
 }
-
-writeFileSync(out, parts.join('\n'), 'utf8');
-const size = statSync(out).size;
-console.log(`Wrote ${out}`);
-console.log(`Files: ${files.length}`);
-console.log(`Size: ${(size / 1024).toFixed(1)} KB`);
+const out = join(mkdtempSync(join(temp, 'couple-spin-export-')), 'code.txt');
+writeFileSync(out, parts.join('\n'), { flag: 'wx', mode: 0o600 });
+console.log(`Exported ${count} files to ${out}`);

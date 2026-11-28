@@ -1,5 +1,6 @@
+import { accountLocal } from './accountStorage';
 import type { GameState } from '../types/game';
-import { getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
+import { ensureFirebaseApp, getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
 import { ensureAnonAuth } from './cloudSync';
 import { captureError, captureEvent } from './monitoring';
 import { checkJoinRateLimit, recordJoinFailure, resetJoinRateLimit } from './roomJoinRateLimit';
@@ -8,22 +9,15 @@ const ROOM_ID_KEY = 'couple-spin-room-id';
 const ROOM_CODE_KEY = 'couple-spin-room-code';
 const ROLE_KEY = 'couple-spin-room-role';
 
-export const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 export const PRESENCE_TIMEOUT_MS = 60_000;
 export const HEARTBEAT_INTERVAL_MS = 25_000;
-export const SNAPSHOT_EVERY_N_EVENTS = 5;
 export const MAX_PLAYER_NAME_LEN = 32;
 export const DISPLAY_CODE_LEN = 8;
 export const MAX_EVENT_PAYLOAD_BYTES = 120_000;
 
 export type RoomRole = 'host' | 'partner';
 export type RoomStatus = 'waiting' | 'lobby' | 'playing' | 'ended';
-export type RoomEventType =
-  | 'PLAYER_READY'
-  | 'GAME_STARTED'
-  | 'GAME_SNAPSHOT'
-  | 'GAME_ENDED'
-  | 'TURN_CHANGED';
+export type RoomEventType = 'GAME_STARTED' | 'GAME_SNAPSHOT' | 'GAME_ENDED';
 
 export type RoomPlayer = {
   uid: string;
@@ -56,15 +50,6 @@ export type CoupleRoom = {
   partnerLastSeenMs: number;
 };
 
-export type RoomGameEvent = {
-  id: string;
-  type: RoomEventType;
-  version: number;
-  createdBy: string;
-  createdAtMs: number;
-  payload: Record<string, unknown>;
-};
-
 export type StoredRoom = { roomId: string; displayCode: string; role: RoomRole };
 
 function canUseRooms(): boolean {
@@ -76,23 +61,6 @@ async function ensureRoomAuth() {
   const user = await ensureAnonAuth();
   if (!user || user.isAnonymous || !user.email) return null;
   return user;
-}
-
-function newRoomId(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `room-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function randomDisplayCode(): string {
-  const min = 10 ** (DISPLAY_CODE_LEN - 1);
-  const range = 9 * min;
-  if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
-    const buf = new Uint32Array(1);
-    crypto.getRandomValues(buf);
-    return String(min + (buf[0]! % range));
-  }
-  return String(min + Math.floor(Math.random() * range));
 }
 
 function normalizeDisplayCode(code: string): string {
@@ -135,83 +103,11 @@ function clampName(name: string, fallback: string): string {
   return trimmed || fallback;
 }
 
-export const SERVER_JOIN_MAX_FAILURES = 10;
-export const SERVER_JOIN_LOCKOUT_MS = 5 * 60_000;
-
-async function checkServerJoinRateLimit(uid: string): Promise<{ allowed: boolean; error?: string }> {
-  const db = await getFirestoreDb();
-  if (!db) return { allowed: true };
-  const { doc, getDoc } = await import('firebase/firestore');
-  const ref = doc(db, 'rateLimits', uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return { allowed: true };
-  const data = snap.data() as Record<string, unknown>;
-  const lockedUntilMs = Number(data.lockedUntilMs) || 0;
-  if (lockedUntilMs > Date.now()) return { allowed: false, error: 'join_rate_limited' };
-  return { allowed: true };
-}
-
-async function recordServerJoinFailure(uid: string): Promise<void> {
-  const db = await getFirestoreDb();
-  if (!db) return;
-  const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
-  const ref = doc(db, 'rateLimits', uid);
-  const snap = await getDoc(ref);
-  const prev = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
-  const failures = Number(prev.failedJoins) || 0;
-  const lockedUntilMs = Number(prev.lockedUntilMs) || 0;
-  if (lockedUntilMs > Date.now()) return;
-
-  // Rules only allow: +1 failure, OR lockout after >=9 failures, OR clear expired lock.
-  if (failures + 1 >= SERVER_JOIN_MAX_FAILURES) {
-    await setDoc(
-      ref,
-      {
-        failedJoins: 0,
-        lockedUntilMs: Date.now() + SERVER_JOIN_LOCKOUT_MS,
-        updatedAtMs: Date.now(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    return;
-  }
-
-  await setDoc(
-    ref,
-    {
-      failedJoins: failures + 1,
-      lockedUntilMs,
-      updatedAtMs: Date.now(),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-}
-
-/** Clear lockout only after it expired — never allow arbitrary client reset. */
-async function clearExpiredServerJoinLock(uid: string): Promise<void> {
-  const db = await getFirestoreDb();
-  if (!db) return;
-  const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
-  const ref = doc(db, 'rateLimits', uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-  const data = snap.data() as Record<string, unknown>;
-  const lockedUntilMs = Number(data.lockedUntilMs) || 0;
-  if (lockedUntilMs <= 0 || lockedUntilMs > Date.now()) return;
-  await setDoc(
-    ref,
-    { failedJoins: 0, lockedUntilMs: 0, updatedAtMs: Date.now(), updatedAt: serverTimestamp() },
-    { merge: true },
-  );
-}
-
 function readStored(): StoredRoom | null {
   try {
-    const roomId = localStorage.getItem(ROOM_ID_KEY);
-    const displayCode = localStorage.getItem(ROOM_CODE_KEY);
-    const role = localStorage.getItem(ROLE_KEY);
+    const roomId = accountLocal.getItem(ROOM_ID_KEY);
+    const displayCode = accountLocal.getItem(ROOM_CODE_KEY);
+    const role = accountLocal.getItem(ROLE_KEY);
     if (!displayCode || (role !== 'host' && role !== 'partner')) return null;
     return {
       roomId: roomId ?? displayCode,
@@ -224,15 +120,15 @@ function readStored(): StoredRoom | null {
 }
 
 function writeStored(roomId: string, displayCode: string, role: RoomRole): void {
-  localStorage.setItem(ROOM_ID_KEY, roomId);
-  localStorage.setItem(ROOM_CODE_KEY, displayCode);
-  localStorage.setItem(ROLE_KEY, role);
+  accountLocal.setItem(ROOM_ID_KEY, roomId);
+  accountLocal.setItem(ROOM_CODE_KEY, displayCode);
+  accountLocal.setItem(ROLE_KEY, role);
 }
 
 export function clearStoredRoom(): void {
-  localStorage.removeItem(ROOM_ID_KEY);
-  localStorage.removeItem(ROOM_CODE_KEY);
-  localStorage.removeItem(ROLE_KEY);
+  accountLocal.removeItem(ROOM_ID_KEY);
+  accountLocal.removeItem(ROOM_CODE_KEY);
+  accountLocal.removeItem(ROLE_KEY);
 }
 
 export function getStoredRoom(): StoredRoom | null {
@@ -244,7 +140,7 @@ function isExpired(room: CoupleRoom): boolean {
 }
 
 function parseRoom(roomId: string, raw: Record<string, unknown>): CoupleRoom {
-  const displayCode = String(raw.displayCode ?? raw.code ?? '');
+  const displayCode = String(raw.displayCode ?? raw.code ?? (/^[0-9]{8}$/.test(roomId) ? roomId : ''));
   return {
     roomId,
     displayCode,
@@ -308,207 +204,60 @@ export function bothPlayersReady(room: CoupleRoom | null): boolean {
   return room.hostReady && room.partnerReady;
 }
 
-async function resolveRoomIdByDisplayCode(displayCode: string): Promise<string | null> {
-  const db = await getFirestoreDb();
-  if (!db) return null;
-  const { doc, getDoc } = await import('firebase/firestore');
-  const codeSnap = await getDoc(doc(db, 'roomCodes', displayCode));
-  if (codeSnap.exists()) {
-    const data = codeSnap.data() as Record<string, unknown>;
-    if (typeof data.roomId === 'string') return data.roomId;
-  }
-  const legacySnap = await getDoc(doc(db, 'rooms', displayCode));
-  if (legacySnap.exists()) return displayCode;
-  return null;
+type AccessResult = { ok: boolean; roomId?: string; error?: string };
+
+async function requestRoomAccess(data: Record<string, string>): Promise<AccessResult> {
+  const app = await ensureFirebaseApp();
+  if (!app) return { ok: false, error: 'firebase_not_configured' };
+  if (!await ensureRoomAuth()) return { ok: false, error: 'auth_failed' };
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const call = httpsCallable<Record<string, string>, AccessResult>(getFunctions(app), 'coupleRoomAccess');
+  return (await call(data)).data;
 }
 
-export async function createCoupleRoom(hostName: string, eveningTitle = 'ערב זוגי'): Promise<{
-  ok: boolean;
-  room?: CoupleRoom;
-  error?: string;
-}> {
-  if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
-  const user = await ensureRoomAuth();
-  const db = await getFirestoreDb();
-  if (!user || !db) return { ok: false, error: 'auth_failed' };
-
-  const { doc, getDoc, serverTimestamp, writeBatch } = await import('firebase/firestore');
-  const roomId = newRoomId();
-  const now = Date.now();
-
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const displayCode = randomDisplayCode();
-    const codeRef = doc(db, 'roomCodes', displayCode);
-    const existingCode = await getDoc(codeRef);
-    if (existingCode.exists()) continue;
-
-    const room: CoupleRoom = {
-      roomId,
-      displayCode,
-      code: displayCode,
-      hostUid: user.uid,
-      partnerUid: null,
-      hostName: clampName(hostName, 'שחקן 1'),
-      partnerName: null,
-      status: 'waiting',
-      createdAtMs: now,
-      updatedAtMs: now,
-      expiresAtMs: now + ROOM_TTL_MS,
-      version: 0,
-      eveningTitle: eveningTitle.slice(0, 64),
-      lastEventId: null,
-      updatedBy: user.uid,
-      hostReady: false,
-      partnerReady: false,
-      hostLastSeenMs: now,
-      partnerLastSeenMs: 0,
-    };
-
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'rooms', roomId), { ...room, updatedAt: serverTimestamp() });
-    batch.set(codeRef, {
-      roomId,
-      displayCode,
-      expiresAtMs: room.expiresAtMs,
-      createdAtMs: now,
-      hostUid: user.uid,
-    });
-    await batch.commit();
-
-    writeStored(roomId, displayCode, 'host');
-    captureEvent('room_created', { roomId });
-    void import('./userProfile').then((m) =>
-      m.ensureUserProfile({ displayName: clampName(hostName, 'שחקן 1'), lastRoomId: roomId }),
-    );
+async function openRoom(data: Record<string, string>): Promise<{ ok: boolean; room?: CoupleRoom; error?: string }> {
+  try {
+    const result = await requestRoomAccess(data);
+    if (!result.ok || !result.roomId) return { ok: false, error: result.error ?? 'sync_failed' };
+    const user = await ensureRoomAuth();
+    const db = await getFirestoreDb();
+    if (!user || !db) return { ok: false, error: 'auth_failed' };
+    const { doc, getDocFromServer } = await import('firebase/firestore');
+    const snap = await getDocFromServer(doc(db, 'rooms', result.roomId));
+    if (!snap.exists()) return { ok: false, error: 'room_not_found' };
+    const room = parseRoom(snap.id, snap.data());
+    if (room.hostUid !== user.uid && room.partnerUid !== user.uid) return { ok: false, error: 'permission_denied' };
+    writeStored(room.roomId, room.displayCode, room.hostUid === user.uid ? 'host' : 'partner');
+    captureEvent(data.action === 'create' ? 'room_created' : 'room_joined', { roomId: room.roomId });
+    void import('./userProfile').then((m) => m.ensureUserProfile({ displayName: data.name, lastRoomId: room.roomId }));
     return { ok: true, room };
+  } catch (error) {
+    captureError(error, { action: data.action });
+    return { ok: false, error: data.action === 'create' ? 'create_failed' : 'join_failed' };
   }
-  captureError(new Error('code_collision'), { action: 'createCoupleRoom' });
-  return { ok: false, error: 'code_collision' };
 }
 
-export async function joinCoupleRoom(
-  code: string,
-  partnerName: string,
-): Promise<{ ok: boolean; room?: CoupleRoom; error?: string }> {
-  if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
+export async function createCoupleRoom(hostName: string, eveningTitle = 'ערב זוגי') {
+  return openRoom({ action: 'create', name: clampName(hostName, 'שחקן 1'), title: eveningTitle.trim().slice(0, 64) || 'ערב זוגי' });
+}
 
-  const rate = checkJoinRateLimit();
-  if (!rate.allowed) return { ok: false, error: 'join_rate_limited' };
-
-  const ipGuard = await assertJoinGuard();
-  if (!ipGuard.ok) return { ok: false, error: ipGuard.error ?? 'join_rate_limited' };
-
-  const user = await ensureRoomAuth();
-  const db = await getFirestoreDb();
-  if (!user || !db) return { ok: false, error: 'auth_failed' };
-
-  await clearExpiredServerJoinLock(user.uid);
-  const serverRate = await checkServerJoinRateLimit(user.uid);
-  if (!serverRate.allowed) return { ok: false, error: serverRate.error ?? 'join_rate_limited' };
-
+export async function joinCoupleRoom(code: string, partnerName: string) {
   const normalized = normalizeDisplayCode(code);
   if (normalized.length !== DISPLAY_CODE_LEN) return { ok: false, error: 'invalid_code' };
-
-  const roomId = await resolveRoomIdByDisplayCode(normalized);
-  if (!roomId) {
-    recordJoinFailure();
-    await recordServerJoinFailure(user.uid);
-    return { ok: false, error: 'room_not_found' };
-  }
-
-  const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
-  const roomRef = doc(db, 'rooms', roomId);
-
-  try {
-    const joined = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(roomRef);
-      if (!snap.exists()) throw new Error('room_not_found');
-      const current = parseRoom(roomId, snap.data() as Record<string, unknown>);
-      if (isExpired(current)) throw new Error('room_expired');
-      if (current.hostUid === user.uid) return current;
-      if (current.partnerUid === user.uid) return current;
-      if (current.partnerUid) throw new Error('room_full');
-      if (current.status !== 'waiting') throw new Error('room_full');
-
-      const updated: CoupleRoom = {
-        ...current,
-        partnerUid: user.uid,
-        partnerName: clampName(partnerName, 'שחקן 2'),
-        status: 'lobby',
-        updatedAtMs: Date.now(),
-        updatedBy: user.uid,
-      };
-      tx.update(roomRef, {
-        partnerUid: updated.partnerUid,
-        partnerName: updated.partnerName,
-        status: updated.status,
-        partnerReady: false,
-        partnerLastSeenMs: Date.now(),
-        updatedAtMs: updated.updatedAtMs,
-        updatedBy: updated.updatedBy,
-        updatedAt: serverTimestamp(),
-      });
-      return { ...updated, partnerReady: false, partnerLastSeenMs: Date.now() };
-    });
-
-    resetJoinRateLimit();
-    writeStored(roomId, joined.displayCode || normalized, joined.hostUid === user.uid ? 'host' : 'partner');
-    captureEvent('room_joined', { roomId });
-    void import('./userProfile').then((m) =>
-      m.ensureUserProfile({
-        displayName: clampName(partnerName, 'שחקן 2'),
-        lastRoomId: roomId,
-      }),
-    );
-    return { ok: true, room: joined };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'join_failed';
-    if (msg === 'room_not_found' || msg === 'room_expired' || msg === 'room_full') {
-      recordJoinFailure();
-      await recordServerJoinFailure(user.uid);
-    }
-    captureError(err, { action: 'joinCoupleRoom' });
-    return { ok: false, error: msg };
-  }
+  if (!checkJoinRateLimit().allowed) return { ok: false, error: 'join_rate_limited' };
+  const ipGuard = await assertJoinGuard();
+  if (!ipGuard.ok) return { ok: false, error: 'join_rate_limited' };
+  const result = await openRoom({ action: 'join', code: normalized, name: clampName(partnerName, 'שחקן 2') });
+  if (result.ok) resetJoinRateLimit();
+  else if (result.error === 'room_not_found' || result.error === 'room_full') recordJoinFailure();
+  return result;
 }
 
 export async function leaveCoupleRoom(): Promise<void> {
   const stored = readStored();
-  if (!stored || !canUseRooms()) {
-    clearStoredRoom();
-    return;
-  }
-  const user = await ensureRoomAuth();
-  const db = await getFirestoreDb();
-  if (!user || !db) {
-    clearStoredRoom();
-    return;
-  }
-
-  const { doc, getDoc, deleteDoc, serverTimestamp, setDoc } = await import('firebase/firestore');
-  const roomRef = doc(db, 'rooms', stored.roomId);
-  const snap = await getDoc(roomRef);
-  if (snap.exists()) {
-    const room = parseRoom(stored.roomId, snap.data() as Record<string, unknown>);
-    if (room.hostUid === user.uid) {
-      await deleteDoc(doc(db, 'roomCodes', room.displayCode));
-      await deleteDoc(roomRef);
-    } else if (room.partnerUid === user.uid) {
-      await setDoc(
-        roomRef,
-        {
-          partnerUid: null,
-          partnerName: null,
-          partnerReady: false,
-          partnerLastSeenMs: 0,
-          status: 'waiting',
-          updatedAtMs: Date.now(),
-          updatedBy: user.uid,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-    }
+  if (stored && canUseRooms()) {
+    const result = await requestRoomAccess({ action: 'leave', roomId: stored.roomId });
+    if (!result.ok && result.error !== 'auth_failed') throw new Error(result.error ?? 'sync_failed');
   }
   clearStoredRoom();
 }
@@ -535,70 +284,45 @@ export async function setPlayerReady(roomId: string, ready: boolean): Promise<vo
       ? { hostReady: ready, hostLastSeenMs: now, updatedBy: user.uid }
       : { partnerReady: ready, partnerLastSeenMs: now, updatedBy: user.uid };
   await patchCoupleRoom(roomId, patch);
-  await appendRoomEvent(roomId, 'PLAYER_READY', { ready });
 }
 
 export async function sendPresenceHeartbeat(roomId: string): Promise<void> {
   const stored = readStored();
-  if (!stored) return;
+  const user = await ensureRoomAuth();
+  if (!stored || !user) return;
   const now = Date.now();
   const patch =
     stored.role === 'host' ? { hostLastSeenMs: now } : { partnerLastSeenMs: now };
-  await patchCoupleRoom(roomId, patch);
+  await patchCoupleRoom(roomId, { ...patch, updatedBy: user.uid });
 }
 
 export async function appendRoomEvent(
   roomId: string,
   type: RoomEventType,
-  payload: Record<string, unknown> = {},
+  payload = '',
 ): Promise<{ ok: boolean; version?: number; error?: string }> {
-  if (!canUseRooms()) return { ok: false, error: 'firebase_not_configured' };
   const user = await ensureRoomAuth();
   const db = await getFirestoreDb();
   if (!user || !db) return { ok: false, error: 'auth_failed' };
-
-  const payloadJson = JSON.stringify(payload);
-  if (payloadJson.length > MAX_EVENT_PAYLOAD_BYTES) {
-    return { ok: false, error: 'sync_failed' };
-  }
-
-  const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+  if (new TextEncoder().encode(payload).length > MAX_EVENT_PAYLOAD_BYTES) return { ok: false, error: 'sync_failed' };
+  const { doc, runTransaction, serverTimestamp, Timestamp } = await import('firebase/firestore');
   const roomRef = doc(db, 'rooms', roomId);
-  const eventId =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `evt-${Date.now()}`;
-
   try {
     const version = await runTransaction(db, async (tx) => {
       const snap = await tx.get(roomRef);
       if (!snap.exists()) throw new Error('room_not_found');
-      const room = parseRoom(roomId, snap.data() as Record<string, unknown>);
+      const room = parseRoom(roomId, snap.data());
       if (isExpired(room)) throw new Error('room_expired');
-      const isMember = room.hostUid === user.uid || room.partnerUid === user.uid;
-      if (!isMember) throw new Error('permission_denied');
-      if (type === 'GAME_STARTED') {
-        if (!room.partnerUid || !room.hostReady || !room.partnerReady) {
-          throw new Error('not_ready');
-        }
-      }
-
+      if (room.hostUid !== user.uid || !room.partnerUid) throw new Error('permission_denied');
+      if (type === 'GAME_STARTED' && !bothPlayersReady(room)) throw new Error('not_ready');
       const nextVersion = room.version + 1;
-      const eventRef = doc(db, 'rooms', roomId, 'events', eventId);
-      tx.set(eventRef, {
-        type,
-        version: nextVersion,
-        createdBy: user.uid,
-        createdAtMs: Date.now(),
-        payload,
-        createdAt: serverTimestamp(),
+      if (nextVersion > 2048) throw new Error('room_event_limit');
+      tx.set(doc(roomRef, 'sync', 'current'), {
+        type, version: nextVersion, payload, createdAt: serverTimestamp(),
+        coupleSpinExpireAt: Timestamp.fromMillis(room.expiresAtMs),
       });
       tx.update(roomRef, {
-        version: nextVersion,
-        lastEventId: eventId,
-        updatedBy: user.uid,
-        updatedAtMs: Date.now(),
-        updatedAt: serverTimestamp(),
+        version: nextVersion, updatedBy: user.uid, updatedAtMs: Date.now(), updatedAt: serverTimestamp(),
         ...(type === 'GAME_STARTED' ? { status: 'playing' } : {}),
         ...(type === 'GAME_ENDED' ? { status: 'ended' } : {}),
       });
@@ -606,18 +330,13 @@ export async function appendRoomEvent(
     });
     return { ok: true, version };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'sync_failed';
-    return { ok: false, error: msg };
+    return { ok: false, error: err instanceof Error ? err.message : 'sync_failed' };
   }
 }
 
 export async function pushRoomGameState(roomId: string, game: GameState): Promise<void> {
-  const slim = sanitizeGameForSync(game);
-  await appendRoomEvent(roomId, slim.screen === 'end' ? 'GAME_ENDED' : 'GAME_SNAPSHOT', {
-    gameState: slim,
-    screen: slim.screen,
-    sparkStreak: slim.stats.streak,
-  });
+  const state = sanitizeGameForSync(game);
+  await appendRoomEvent(roomId, state.screen === 'end' ? 'GAME_ENDED' : 'GAME_SNAPSHOT', JSON.stringify(state));
 }
 
 export function subscribeCoupleRoom(
@@ -629,62 +348,54 @@ export function subscribeCoupleRoom(
     onRoom(null);
     return () => {};
   }
+  let active = true;
   let unsubscribe = () => {};
   void (async () => {
     const db = await getFirestoreDb();
-    if (!db) {
-      onRoom(null);
-      return;
-    }
+    if (!db || !active) return;
     const { doc, onSnapshot } = await import('firebase/firestore');
-    unsubscribe = onSnapshot(doc(db, 'rooms', roomId), (snap) => {
-      if (!snap.exists()) {
-        onRoom(null);
-        return;
-      }
-      const room = parseRoom(roomId, snap.data() as Record<string, unknown>);
-      if (isExpired(room)) {
-        onRoom(null);
-        return;
-      }
-      onRoom({ ...room, displayCode: room.displayCode || displayCode, code: room.displayCode || displayCode });
-    });
+    if (!active) return;
+    unsubscribe = onSnapshot(doc(db, 'rooms', roomId), { includeMetadataChanges: true }, (snap) => {
+      if (snap.metadata.fromCache) return;
+      if (!snap.exists()) return onRoom(null);
+      const room = parseRoom(roomId, snap.data());
+      onRoom(isExpired(room) ? null : { ...room, displayCode: room.displayCode || displayCode });
+    }, () => onRoom(null));
   })();
-  return () => unsubscribe();
+  return () => { active = false; unsubscribe(); };
 }
 
-export function subscribeRoomEvents(
-  roomId: string,
-  fromVersion: number,
-  onEvent: (event: RoomGameEvent) => void,
-): () => void {
-  if (!canUseRooms()) return () => {};
+export function readSyncedGame(raw: Record<string, unknown>, fromVersion: number): { game: GameState; version: number } | null {
+  if (raw.type !== 'GAME_SNAPSHOT' && raw.type !== 'GAME_ENDED') return null;
+  if (typeof raw.version !== 'number' || !Number.isInteger(raw.version) || raw.version <= fromVersion || raw.version > 2048) return null;
+  if (typeof raw.payload !== 'string' || new TextEncoder().encode(raw.payload).length > MAX_EVENT_PAYLOAD_BYTES) return null;
+  try {
+    const game: unknown = JSON.parse(raw.payload);
+    return isValidRemoteGameState(game) ? { game, version: raw.version } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeRoomGame(roomId: string, onGame: (game: GameState | null, version: number) => void): () => void {
+  let active = true;
   let unsubscribe = () => {};
   void (async () => {
     const db = await getFirestoreDb();
-    if (!db) return;
-    const { collection, onSnapshot, orderBy, query } = await import('firebase/firestore');
-    const q = query(collection(db, 'rooms', roomId, 'events'), orderBy('version', 'asc'));
-    let lastSeen = fromVersion;
-    unsubscribe = onSnapshot(q, (snap) => {
-      for (const change of snap.docChanges()) {
-        if (change.type !== 'added' && change.type !== 'modified') continue;
-        const raw = change.doc.data() as Record<string, unknown>;
-        const version = Number(raw.version) || 0;
-        if (version <= lastSeen) continue;
-        lastSeen = version;
-        onEvent({
-          id: change.doc.id,
-          type: raw.type as RoomEventType,
-          version,
-          createdBy: String(raw.createdBy ?? ''),
-          createdAtMs: Number(raw.createdAtMs) || 0,
-          payload: (raw.payload as Record<string, unknown>) ?? {},
-        });
-      }
-    });
+    if (!db || !active) return;
+    const { doc, onSnapshot } = await import('firebase/firestore');
+    if (!active) return;
+    let lastSeen = 0;
+    unsubscribe = onSnapshot(doc(db, 'rooms', roomId, 'sync', 'current'), { includeMetadataChanges: true }, (snap) => {
+      if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
+      if (!snap.exists()) return onGame(null, 0);
+      const state = readSyncedGame(snap.data(), lastSeen);
+      if (!state) return;
+      lastSeen = state.version;
+      onGame(state.game, state.version);
+    }, () => onGame(null, 0));
   })();
-  return () => unsubscribe();
+  return () => { active = false; unsubscribe(); };
 }
 
 export function partnerConnected(room: CoupleRoom | null): boolean {
@@ -695,6 +406,8 @@ const VALID_SCREENS = new Set([
   'welcome',
   'tutorial',
   'setup',
+  'mode-select',
+  'level-select',
   'dice-roll',
   'game',
   'end',
@@ -713,11 +426,4 @@ export function isValidRemoteGameState(value: unknown): value is GameState {
   if (!Array.isArray(g.usedTaskIds)) return false;
   if (!g.stats || typeof g.stats !== 'object') return false;
   return true;
-}
-
-export function extractGameFromEvent(event: RoomGameEvent): GameState | null {
-  if (event.type !== 'GAME_SNAPSHOT' && event.type !== 'GAME_ENDED') return null;
-  const state = event.payload.gameState;
-  if (!isValidRemoteGameState(state)) return null;
-  return state;
 }

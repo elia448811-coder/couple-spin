@@ -1,3 +1,4 @@
+import { accountLocal } from './accountStorage';
 import type { GameHistoryEntry } from '../types/game';
 
 const GUEST_KEY = 'couple-spin-guest';
@@ -22,8 +23,8 @@ export type ContentBoundary = 'touch' | 'photo' | 'outside' | 'intimate';
 export type Boundaries = { playerOne: ContentBoundary[]; playerTwo: ContentBoundary[] };
 const BOUNDARY_VALUES = new Set<ContentBoundary>(['touch', 'photo', 'outside', 'intimate']);
 
-function getStorage(): Storage | null {
-  return typeof window === 'undefined' ? null : window.localStorage;
+function getStorage() {
+  return typeof window === 'undefined' ? null : accountLocal;
 }
 
 function readJson(key: string): unknown {
@@ -67,7 +68,7 @@ export function setGuestMode(on: boolean): void {
     const storage = getStorage();
     if (on) {
       storage?.setItem(GUEST_KEY, 'true');
-      void import('./cloudSync').then(({ signOutCloudUser }) => signOutCloudUser());
+      void import('./cloudSync').then(({ cancelCloudSync }) => cancelCloudSync());
     } else {
       storage?.removeItem(GUEST_KEY);
       notifyPrivacyChanged();

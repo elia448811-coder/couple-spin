@@ -1,5 +1,7 @@
+import { accountLocal, storageUid } from './accountStorage';
+import { DEFAULT_SETTINGS } from '../types/game';
 import { getFirebaseAuth, getFirestoreDb, isFirebaseConfigured } from '../lib/firebase';
-import { isSoleAdminIdentity } from './admin';
+import { isSoleAdminUid } from './admin';
 import { loadSettings, saveSettings } from './storage';
 
 async function requireEmailUser() {
@@ -33,7 +35,7 @@ function clampName(name: string, fallback: string): string {
 }
 
 function defaultProfile(uid: string): UserProfile {
-  const settings = loadSettings();
+  const settings = DEFAULT_SETTINGS;
   const now = Date.now();
   return {
     uid,
@@ -70,8 +72,9 @@ function parseProfile(uid: string, raw: Record<string, unknown> | undefined): Us
 }
 
 function cacheLocal(profile: UserProfile): void {
+  if (isFirebaseConfigured() && profile.uid !== storageUid()) return;
   try {
-    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(profile));
+    accountLocal.setItem(LOCAL_CACHE_KEY, JSON.stringify(profile));
   } catch {
     /* ignore */
   }
@@ -79,7 +82,7 @@ function cacheLocal(profile: UserProfile): void {
 
 export function getCachedUserProfile(): UserProfile | null {
   try {
-    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    const raw = accountLocal.getItem(LOCAL_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed.uid !== 'string') return null;
@@ -130,28 +133,10 @@ export async function ensureUserProfile(
     payload.createdAt = serverTimestamp();
     if (partial?.username?.trim()) payload.username = partial.username.trim().slice(0, 32);
     // First profile create: non-admin always pending (Rules enforce approved!=true on self-create).
-    payload.approved = isSoleAdminIdentity(user.uid, user.email);
+    payload.approved = isSoleAdminUid(user.uid);
     payload.banned = false;
-    payload.adminNote = '';
   }
   await setDoc(ref, payload, { merge: true });
-
-  // Keep legacy meta/profile in sync for older readers.
-  await setDoc(
-    doc(db, 'users', user.uid, 'meta', 'profile'),
-    {
-      displayName: next.displayName,
-      partnerDisplayName: next.partnerDisplayName,
-      avatar: next.avatar,
-      lastSeenMs: next.lastSeenMs,
-      updatedAtMs: next.updatedAtMs,
-      lastRoomId: next.lastRoomId,
-      gamesPlayed: next.gamesPlayed,
-      schemaVersion: USER_PROFILE_SCHEMA,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
 
   cacheLocal(next);
   return next;
@@ -207,12 +192,17 @@ export async function touchUserPresence(): Promise<void> {
 }
 
 export async function incrementGamesPlayed(): Promise<void> {
+  const uid = storageUid();
+  if (!uid) return;
+  const { canSync } = await import('./cloudSync');
+  if (!canSync()) return;
   const profile = await getUserProfile();
-  if (!profile) return;
+  if (profile?.uid !== uid) return;
   const user = await requireEmailUser();
   const db = await getFirestoreDb();
-  if (!user || !db) return;
+  if (user?.uid !== uid || !db) return;
   const { doc, increment, serverTimestamp, setDoc } = await import('firebase/firestore');
+  if (!canSync() || storageUid() !== uid) return;
   const now = Date.now();
   await setDoc(
     doc(db, 'users', user.uid),

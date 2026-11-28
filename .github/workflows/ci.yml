@@ -38,6 +38,9 @@ jobs:
       - name: Verify copies of the Firestore rules
         run: node scripts/check-firestore-rules-copies.mjs
 
+      - name: Check the source exporter
+        run: node scripts/test-source-export.mjs
+
       - name: Lint
         run: npm run lint
 
@@ -59,6 +62,22 @@ jobs:
 
       - name: Dependency audit (high+)
         run: npm audit --audit-level=high
+
+  firebase-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix functions
+      - name: Check account and room permissions in the Firestore emulator
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          npx --yes firebase-tools@15.27.0 emulators:exec --only firestore --project demo-couple-spin "node functions/scripts/test-profile-rules.mjs && node functions/scripts/test-rooms.mjs"
 
   e2e:
     needs: quality

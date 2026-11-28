@@ -1,16 +1,13 @@
 /**
- * Ensures sole admin account elia448811@gmail.com exists (Email/Password).
- * Password: ADMIN_PASSWORD env, or prompt via argv, default for first bootstrap only.
+ * Seeds config only after authenticating the independently provisioned admin UID.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile,
 } from 'firebase/auth';
 import { doc, getFirestore, setDoc } from 'firebase/firestore';
 
@@ -59,28 +56,11 @@ const app = initializeApp(config);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-let uid;
-try {
-  const created = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, password);
-  uid = created.user.uid;
-  await updateProfile(created.user, { displayName: 'Elia Admin' });
-  console.log('✓ created admin', uid);
-} catch (error) {
-  const code = error && typeof error === 'object' && 'code' in error ? error.code : '';
-  if (code !== 'auth/email-already-in-use') {
-    console.error('✗', code || error);
-    process.exit(1);
-  }
-  try {
-    const signed = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
-    uid = signed.user.uid;
-    console.log('✓ admin exists (login ok)', uid);
-  } catch {
-    console.log('✓ admin email already registered in Firebase Auth');
-    console.log('  Login on the site with elia448811@gmail.com + your password.');
-    console.log('  (Provided password did not match — skipped config seed.)');
-    process.exit(0);
-  }
+const signed = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
+const uid = signed.user.uid;
+if (uid !== 'tpbKWXtXWFapFC7Fd80Wd4IMqxC2') {
+  await signOut(auth);
+  throw new Error('The signed-in account does not match the provisioned administrator UID');
 }
 
 await setDoc(

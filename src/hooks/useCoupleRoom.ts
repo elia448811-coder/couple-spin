@@ -6,7 +6,6 @@ import {
   appendRoomEvent,
   bothPlayersReady,
   createCoupleRoom,
-  extractGameFromEvent,
   getStoredRoom,
   HEARTBEAT_INTERVAL_MS,
   joinCoupleRoom,
@@ -17,7 +16,7 @@ import {
   sendPresenceHeartbeat,
   setPlayerReady,
   subscribeCoupleRoom,
-  subscribeRoomEvents,
+  subscribeRoomGame,
   type CoupleRoom,
   type RoomRole,
 } from '../utils/coupleRoom';
@@ -34,7 +33,6 @@ export function useCoupleRoom() {
   const [error, setError] = useState<string | null>(null);
   const [lastEventVersion, setLastEventVersion] = useState(0);
   const remoteGameRef = useRef<GameState | null>(null);
-  const eventVersionRef = useRef(0);
 
   const players = useMemo(() => (room ? playersFromRoom(room) : []), [room]);
 
@@ -48,14 +46,10 @@ export function useCoupleRoom() {
         setActiveRoomId(null);
         setActiveDisplayCode(null);
       }
-      if (next) setLastEventVersion(next.version);
     });
-    const unsubEvents = subscribeRoomEvents(activeRoomId, eventVersionRef.current, (event) => {
-      if (event.version <= eventVersionRef.current) return;
-      eventVersionRef.current = event.version;
-      setLastEventVersion(event.version);
-      const game = extractGameFromEvent(event);
-      if (game) remoteGameRef.current = game;
+    const unsubEvents = subscribeRoomGame(activeRoomId, (game, version) => {
+      remoteGameRef.current = game;
+      setLastEventVersion(version);
     });
 
     return () => {
@@ -81,7 +75,7 @@ export function useCoupleRoom() {
       setError(result.error ?? 'create_failed');
       return null;
     }
-    eventVersionRef.current = 0;
+    setLastEventVersion(0);
     remoteGameRef.current = null;
     setRoom(result.room);
     setRole('host');
@@ -100,7 +94,7 @@ export function useCoupleRoom() {
       return null;
     }
     const storedAfter = getStoredRoom();
-    eventVersionRef.current = 0;
+    setLastEventVersion(0);
     remoteGameRef.current = null;
     setRoom(result.room);
     setRole(storedAfter?.role ?? 'partner');
@@ -111,12 +105,18 @@ export function useCoupleRoom() {
 
   const leaveRoom = useCallback(async () => {
     setBusy(true);
-    await leaveCoupleRoom();
+    try {
+      await leaveCoupleRoom();
+    } catch {
+      setError('sync_failed');
+      setBusy(false);
+      return;
+    }
     setRoom(null);
     setRole(null);
     setActiveRoomId(null);
     setActiveDisplayCode(null);
-    eventVersionRef.current = 0;
+    setLastEventVersion(0);
     remoteGameRef.current = null;
     setBusy(false);
   }, []);
@@ -143,7 +143,7 @@ export function useCoupleRoom() {
 
   const signalGameStarted = useCallback(async () => {
     if (!room?.roomId || role !== 'host') return;
-    await appendRoomEvent(room.roomId, 'GAME_STARTED', {});
+    await appendRoomEvent(room.roomId, 'GAME_STARTED');
   }, [room?.roomId, role]);
 
   const consumeRemoteGame = useCallback((): GameState | null => {

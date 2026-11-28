@@ -6,6 +6,7 @@ export type RoomErrorCode =
   | 'room_expired'
   | 'room_full'
   | 'join_rate_limited'
+  | 'create_rate_limited'
   | 'code_collision'
   | 'create_failed'
   | 'join_failed'
@@ -56,6 +57,11 @@ const ERROR_MAP: Record<RoomErrorCode, Omit<RoomErrorInfo, 'internalCode'>> = {
   join_rate_limited: {
     title: 'יותר מדי ניסיונות',
     message: 'נחסמתם זמנית אחרי ניסיונות הצטרפות כושלים. המתינו דקה ונסו שוב.',
+    retryable: true,
+  },
+  create_rate_limited: {
+    title: 'המתנה קצרה',
+    message: 'אפשר לפתוח חדר חדש כעבור 30 שניות מפתיחת החדר הקודם.',
     retryable: true,
   },
   code_collision: {

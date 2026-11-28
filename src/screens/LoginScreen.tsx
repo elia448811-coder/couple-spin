@@ -99,7 +99,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
                 setUsername(e.target.value);
                 setError('');
               }}
-              placeholder="שם משתמש (או אימייל מנהל)"
+              placeholder={mode === 'register' ? 'שם משתמש' : 'שם משתמש (או אימייל מנהל)'}
               autoComplete="username"
               autoFocus
               disabled={busy}

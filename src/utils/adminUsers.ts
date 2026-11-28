@@ -1,10 +1,10 @@
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteField, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { getFirebaseAuth, getFirestoreDb, isFirebaseConfigured, readFirebaseWebConfig } from '../lib/firebase';
-import { assertAdmin, getSoleAdminUid, isSoleAdminIdentity, isSoleAdminUid } from './admin';
+import { assertAdmin, isSoleAdminUid } from './admin';
 import { isValidUsername, normalizeUsername, usernameToEmail } from './userAuth';
 
 function assertNotSoleAdminTarget(uid: string, action: string): void {
-  if (isSoleAdminUid(uid) || uid === getSoleAdminUid()) {
+  if (isSoleAdminUid(uid)) {
     throw new Error(`לא ניתן לבצע ${action} על חשבון מנהל המערכת.`);
   }
 }
@@ -28,7 +28,7 @@ export function hasAccountApproval(profile: { approved?: unknown } | undefined):
   return profile?.approved === true;
 }
 
-function parseUser(uid: string, raw: Record<string, unknown>): AdminUserRow {
+function parseUser(uid: string, raw: Record<string, unknown>, privateNote?: string): AdminUserRow {
   const approved = hasAccountApproval(raw);
   return {
     uid,
@@ -42,7 +42,7 @@ function parseUser(uid: string, raw: Record<string, unknown>): AdminUserRow {
     banned: Boolean(raw.banned),
     approved,
     pending: !approved && !raw.banned,
-    adminNote: typeof raw.adminNote === 'string' ? raw.adminNote : '',
+    adminNote: privateNote ?? (typeof raw.adminNote === 'string' ? raw.adminNote : ''),
   };
 }
 
@@ -50,9 +50,13 @@ export async function listAppUsers(max = 500): Promise<AdminUserRow[]> {
   await assertAdmin();
   const db = await getFirestoreDb();
   if (!db) return [];
-  const snap = await getDocs(collection(db, 'users'));
+  const [snap, notes] = await Promise.all([
+    getDocs(collection(db, 'users')),
+    getDocs(collection(db, 'adminUserNotes')),
+  ]);
+  const byUid = new Map(notes.docs.map(d => [d.id, String(d.data().note ?? '')]));
   return snap.docs
-    .map((d) => parseUser(d.id, d.data() as Record<string, unknown>))
+    .map((d) => parseUser(d.id, d.data(), byUid.get(d.id)))
     .sort((a, b) => {
       if (a.pending !== b.pending) return a.pending ? -1 : 1;
       return b.lastSeenMs - a.lastSeenMs;
@@ -88,10 +92,10 @@ export async function setUserAdminNote(uid: string, adminNote: string): Promise<
   await assertAdmin();
   const db = await getFirestoreDb();
   if (!db) throw new Error('Firestore לא זמין');
-  await updateDoc(doc(db, 'users', uid), {
-    adminNote: adminNote.trim().slice(0, 200),
-    updatedAtMs: Date.now(),
-  });
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'adminUserNotes', uid), { note: adminNote.trim().slice(0, 200) });
+  batch.update(doc(db, 'users', uid), { adminNote: deleteField(), updatedAtMs: Date.now() });
+  await batch.commit();
 }
 
 export async function isCurrentUserBanned(): Promise<boolean> {
@@ -109,7 +113,7 @@ export async function isCurrentUserPendingApproval(): Promise<boolean> {
   const auth = await getFirebaseAuth();
   const user = auth?.currentUser;
   if (!user || user.isAnonymous) return false;
-  if (isSoleAdminIdentity(user.uid, user.email)) return false;
+  if (isSoleAdminUid(user.uid)) return false;
   const db = await getFirestoreDb();
   if (!db) return true;
   const snap = await getDoc(doc(db, 'users', user.uid));
@@ -166,7 +170,6 @@ export async function createAppUserByAdmin(input: {
       gamesPlayed: 0,
       approved,
       banned: false,
-      adminNote: '',
     });
 
     await signOut(secondaryAuth);

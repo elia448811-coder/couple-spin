@@ -13,6 +13,7 @@ import {
   parseAllowedOrigins,
   parseTokenParts,
   validateTokenShape,
+  verificationKey,
 } from '../../shared/auth-core.mjs';
 
 import { hasSharedAuthStore, isSharedTokenRevoked, revokeSharedToken, sharedAttempt } from '../../shared/auth-store.mjs';
@@ -112,27 +113,9 @@ function hmacSign(secret, message) {
   return createHmac('sha256', secret).update(message).digest('base64url');
 }
 
-function parseSecretMap() {
-  const raw = process.env.SESSION_SECRETS;
-  if (!raw) return {};
-  try {
-    const parsed = raw.trim().startsWith('{') ? JSON.parse(raw) : Object.fromEntries(raw.split(',').map((pair) => pair.split(/:(.+)/)).filter(([kid, secret]) => kid && secret));
-    return Object.fromEntries(Object.entries(parsed).filter(([kid, secret]) => typeof kid === 'string' && typeof secret === 'string' && secret));
-  } catch {
-    return {};
-  }
-}
-
 export function sessionSigningSecret() {
   const secret = process.env.SESSION_SECRET || (!production() && (process.env.SITE_PASSWORD || process.env.PASS_W)) || '';
   return secret;
-}
-
-function verificationSecrets() {
-  const secrets = parseSecretMap();
-  const signing = sessionSigningSecret();
-  if (signing) secrets[currentKid()] = signing;
-  return secrets;
 }
 
 export function sitePassword() {
@@ -156,8 +139,10 @@ export function verifySessionToken(_secret, token) {
   const now = Date.now();
   if (!parsed || !Number.isSafeInteger(parsed.exp) || parsed.exp <= now || parsed.exp - now > MAX_SESSION_TTL_MS) return false;
   if (parsed.kind === 'legacy' && !isLegacyAllowed(process.env.ALLOW_LEGACY_TOKENS)) return false;
-  const secret = parsed.kind === 'legacy' ? sessionSigningSecret() : verificationSecrets()[parsed.kid];
-  return Boolean(secret) && timingSafeEqual(parsed.sig, hmacSign(secret, parsed.payload));
+  const secret = parsed.kind === 'legacy'
+    ? sessionSigningSecret()
+    : verificationKey(parsed.kid, currentKid(), sessionSigningSecret(), process.env.SESSION_SECRETS);
+  return typeof secret === 'string' && secret.length > 0 && timingSafeEqual(parsed.sig, hmacSign(secret, parsed.payload));
 }
 
 export function readCookie(req, name) {

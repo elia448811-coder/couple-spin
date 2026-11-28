@@ -281,16 +281,16 @@ export function SettingsPanel({
       <div className="settings-group">
         <span className="settings-label">פרטיות</span>
         <p className="custom-content-panel__hint">
-          שמות, היסטוריה ותוכן מותאם נשמרים רק במכשיר זה. אין שליחה לשרת.
+          ההתנתקות מוחקת את נתוני המשחק מהמכשיר. אפשר להפעיל גיבוי לחשבון בהגדרות הפרטיות.
         </p>
         <button
           type="button"
           className="secondary-action pressable"
           onClick={() => {
             if (!window.confirm('למחוק את כל הנתונים המקומיים מהמכשיר?')) return;
-            clearAllLocalData();
+            if (!clearAllLocalData().ok) { window.alert('מחיקת המידע המקומי נכשלה.'); return; }
             setCleared(true);
-            window.setTimeout(() => window.location.reload(), 400);
+            window.location.reload();
           }}
         >
           מחיקת כל הנתונים

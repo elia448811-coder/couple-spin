@@ -6,6 +6,7 @@ import {
   playersFromRoom,
   presenceLabel,
   PRESENCE_TIMEOUT_MS,
+  readSyncedGame,
   sanitizeGameForSync,
   type CoupleRoom,
 } from './coupleRoom';
@@ -75,6 +76,21 @@ describe('coupleRoom helpers', () => {
         stats: {},
       }),
     ).toBe(true);
+  });
+
+  it('accepts only bounded valid snapshots newer than the applied version', () => {
+    const game = {
+      screen: 'game', scores: [0, 0], playerOneName: 'א', playerTwoName: 'ב',
+      currentPlayerIndex: 0, usedTaskIds: [], stats: {},
+    };
+    const packet = { version: 2, type: 'GAME_SNAPSHOT', payload: JSON.stringify(game) };
+    expect(readSyncedGame(packet, 1)).toEqual({ game, version: 2 });
+    expect(readSyncedGame(packet, 2)).toBeNull();
+    expect(readSyncedGame({ ...packet, version: 2049 }, 1)).toBeNull();
+    expect(readSyncedGame({ ...packet, type: 'PLAYER_READY' }, 1)).toBeNull();
+    expect(readSyncedGame({ ...packet, payload: 'oops' }, 1)).toBeNull();
+    expect(readSyncedGame({ ...packet, payload: JSON.stringify({ ...game, text: 'א'.repeat(60000) }) }, 1)).toBeNull();
+    expect(readSyncedGame({ ...packet, payload: '{}' }, 1)).toBeNull();
   });
 
   it('trims long usedTaskIds before sync', () => {

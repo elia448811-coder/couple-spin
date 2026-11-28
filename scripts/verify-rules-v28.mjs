@@ -126,10 +126,11 @@ await expectDenied('anon cannot write contentItems', () =>
 // 3) Regular username user also denied
 await signOut(auth).catch(() => {});
 try {
+  if (!process.env.TEST_PARTNER_PASSWORD) throw new Error('TEST_PARTNER_PASSWORD is required');
   const test = await signInWithEmailAndPassword(
     auth,
     usernameToEmail('test_partner'),
-    'CoupleTest2!',
+    process.env.TEST_PARTNER_PASSWORD,
   );
   pass('test_partner sign-in', test.user.uid);
   await expectDenied('test_partner cannot write config/app', () =>

@@ -1,3 +1,4 @@
+import { accountLocal } from './accountStorage';
 import type { GameState } from '../types/game';
 import { finishPayload } from './gameFinish';
 import { pruneHistory } from './privacy';
@@ -14,7 +15,7 @@ const MAX_PROCESSED = 200;
 
 function readProcessed(): string[] {
   try {
-    const raw = localStorage.getItem(PROCESSED_KEY);
+    const raw = accountLocal.getItem(PROCESSED_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed)
       ? parsed.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 128)
@@ -26,7 +27,7 @@ function readProcessed(): string[] {
 
 function writeProcessed(ids: string[]): void {
   try {
-    localStorage.setItem(PROCESSED_KEY, JSON.stringify(ids.slice(0, MAX_PROCESSED)));
+    accountLocal.setItem(PROCESSED_KEY, JSON.stringify(ids.slice(0, MAX_PROCESSED)));
   } catch {
     // ignore
   }
@@ -58,7 +59,7 @@ export function persistGameFinish(game: GameState, finishEventId: string): boole
   saveHistoryEntry(payload.history);
   const pruned = pruneHistory(loadHistory(), 90);
   try {
-    localStorage.setItem('couple-spin-history', JSON.stringify(pruned));
+    accountLocal.setItem('couple-spin-history', JSON.stringify(pruned));
   } catch {
     return false;
   }
