@@ -1,3 +1,4 @@
+import { accountLocal } from '../utils/accountStorage';
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { clearAllLocalData } from '../utils/storage';
 import {
@@ -10,6 +11,8 @@ import {
 } from '../utils/privacy';
 import {
   getSyncState,
+  hasCloudConsent,
+  setCloudConsent,
   pingFirestore,
   pullUserData,
   pushUserData,
@@ -22,18 +25,11 @@ import { isFirebaseConfigured } from '../lib/firebase';
 
 type PrivacyPanelProps = { onChanged?: () => void };
 
-const PRIVACY_KEYS = [
-  'couple-spin-guest',
-  'couple-spin-boundaries',
-  'couple-spin-hidden-tasks',
-  'couple-spin-favorites',
-  'couple-spin-discrete',
-];
-
 function statusLabel(status: CloudStatus | null, checking: boolean): string {
   if (checking) return 'ענן: בודק חיבור…';
   if (!status) return 'ענן: לא נבדק';
   if (status.state === 'disabled') {
+    if (status.reason === 'local') return 'הגיבוי כבוי';
     return status.reason === 'guest' ? 'ענן: כבוי במצב אורח' : 'ענן: לא מוגדר (חסרים משתני Firebase)';
   }
   if (status.state === 'error') return `ענן: שגיאה — ${status.message}`;
@@ -53,6 +49,7 @@ function syncLabel(state: SyncState): string {
 
 export function PrivacyPanel({ onChanged }: PrivacyPanelProps) {
   const [guest, setGuest] = useState(isGuestMode);
+  const [backup, setBackup] = useState(hasCloudConsent);
   const [discrete, setDiscrete] = useState(isDiscreteMode);
   const [message, setMessage] = useState('');
   const [cloudStatus, setCloudStatus] = useState<CloudStatus | null>(null);
@@ -71,7 +68,7 @@ export function PrivacyPanel({ onChanged }: PrivacyPanelProps) {
 
   useEffect(() => {
     refreshCloud();
-  }, [guest]);
+  }, [guest, backup]);
 
   const syncNow = async (direction: 'pull' | 'push' | 'both') => {
     if (direction === 'pull' || direction === 'both') {
@@ -116,51 +113,65 @@ export function PrivacyPanel({ onChanged }: PrivacyPanelProps) {
   };
 
   const clearHistory = () => {
-    localStorage.removeItem('couple-spin-history');
+    accountLocal.removeItem('couple-spin-history');
     setMessage('ההיסטוריה נמחקה.');
     scheduleCloudPush();
     changed();
   };
 
   const clearCustom = () => {
-    localStorage.removeItem('couple-spin-custom-content');
+    accountLocal.removeItem('couple-spin-custom-content');
     setMessage('התוכן המותאם נמחק.');
     scheduleCloudPush();
     changed();
   };
 
   const clearEverything = () => {
-    clearAllLocalData();
-    PRIVACY_KEYS.forEach((key) => localStorage.removeItem(key));
+    setCloudConsent(false);
+    const result = clearAllLocalData();
+    if (!result.ok) { setMessage('מחיקת המידע המקומי נכשלה.'); return; }
+    setBackup(false);
     setGuest(false);
     setDiscrete(false);
     setMessage('כל המידע המקומי נמחק.');
-    scheduleCloudPush();
-    changed();
+    window.location.reload();
   };
 
   return (
     <section className="privacy-panel settings-panel" dir="rtl" aria-labelledby="privacy-title">
       <h2 id="privacy-title" className="flow-title">פרטיות ומידע</h2>
       <p className="flow-desc">
-        הנתונים נשמרים מקומית. עם Firebase מוגדר — גיבוי וסנכרון לענן (לא במצב אורח).
+        גיבוי ב־Firebase כולל שמות שחקנים, הגדרות, היסטוריה, שיאים והישגים, גבולות והעדפות,
+        שאלות ומשימות שהוספתם ואת המשחק הפעיל. הגיבוי נשמר בחשבון גם אחרי כיבוי הסנכרון או התנתקות.
+        פרופיל החשבון ונתונים שאתם משתפים בחדר זוגי נשלחים בנפרד מהגיבוי.
       </p>
+      <label className="settings-toggle">
+        <span>אני רוצה לגבות ולסנכרן את הנתונים האלה לחשבון ממכשיר זה</span>
+        <input type="checkbox" checked={backup} disabled={guest || !isFirebaseConfigured()}
+          onChange={event => {
+            setCloudConsent(event.target.checked);
+            setBackup(hasCloudConsent());
+            if (hasCloudConsent()) void syncNow('both');
+          }}
+        />
+        <span className="settings-toggle__slider" />
+      </label>
       <p className="history-hint" role="status" aria-live="polite">
         {statusLabel(cloudStatus, checkingCloud)}
         {isFirebaseConfigured() ? '' : ' · הוסיפו VITE_FIREBASE_* ב־Vercel'}
       </p>
       <p className="history-hint" aria-live="polite">{syncLabel(syncState)}</p>
       <div className="settings-actions">
-        <button type="button" className="flow-link pressable" onClick={refreshCloud} disabled={checkingCloud}>
+        <button type="button" className="flow-link pressable" onClick={refreshCloud} disabled={checkingCloud || !backup || guest}>
           בדוק חיבור ענן
         </button>
-        <button type="button" className="flow-link pressable" onClick={() => void syncNow('both')}>
+        <button type="button" className="flow-link pressable" disabled={!backup || guest} onClick={() => void syncNow('both')}>
           מזג בין מכשיר לענן
         </button>
-        <button type="button" className="flow-link pressable" onClick={() => void syncNow('pull')}>
+        <button type="button" className="flow-link pressable" disabled={!backup || guest} onClick={() => void syncNow('pull')}>
           הורד גרסה מהענן
         </button>
-        <button type="button" className="flow-link pressable" onClick={() => void syncNow('push')}>
+        <button type="button" className="flow-link pressable" disabled={!backup || guest} onClick={() => void syncNow('push')}>
           שמור מכשיר לענן
         </button>
       </div>

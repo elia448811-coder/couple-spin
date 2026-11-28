@@ -13,6 +13,7 @@ import {
   parseAllowedOrigins,
   parseTokenParts,
   validateTokenShape,
+  verificationKey,
 } from '../shared/auth-core.mjs';
 
 import { isSharedTokenRevoked, revokeSharedToken, sharedAttempt } from '../shared/auth-store.mjs';
@@ -89,19 +90,6 @@ function sitePassword(env) {
   return env.PASS_W || '';
 }
 
-function secretMap(env) {
-  let secrets = {};
-  if (env.SESSION_SECRETS) {
-    try {
-      secrets = env.SESSION_SECRETS.trim().startsWith('{')
-        ? JSON.parse(env.SESSION_SECRETS)
-        : Object.fromEntries(env.SESSION_SECRETS.split(',').map((pair) => pair.split(/:(.+)/)).filter(([kid, secret]) => kid && secret));
-    } catch { /* invalid maps cannot verify any additional keys */ }
-  }
-  if (env.SESSION_SECRET) secrets[env.CURRENT_KID || CURRENT_KID] = env.SESSION_SECRET;
-  return secrets;
-}
-
 async function createSessionToken(secret, env) {
   const exp = Date.now() + SESSION_TTL_MS;
   const nonce = crypto.randomUUID();
@@ -117,8 +105,10 @@ async function verifySessionToken(env, token) {
   const now = Date.now();
   if (!parsed || !Number.isSafeInteger(parsed.exp) || parsed.exp <= now || parsed.exp - now > MAX_SESSION_TTL_MS) return false;
   if (parsed.kind === 'legacy' && !isLegacyAllowed(env.ALLOW_LEGACY_TOKENS)) return false;
-  const secret = parsed.kind === 'legacy' ? sessionSecret(env) : secretMap(env)[parsed.kid];
-  return Boolean(secret) && timingSafeEqual(parsed.sig, await hmacSign(secret, parsed.payload));
+  const secret = parsed.kind === 'legacy'
+    ? sessionSecret(env)
+    : verificationKey(parsed.kid, env.CURRENT_KID || CURRENT_KID, sessionSecret(env), env.SESSION_SECRETS);
+  return typeof secret === 'string' && secret.length > 0 && timingSafeEqual(parsed.sig, await hmacSign(secret, parsed.payload));
 }
 
 async function parseJsonBody(request) {

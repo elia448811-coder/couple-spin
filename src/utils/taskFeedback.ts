@@ -1,3 +1,4 @@
+import { accountLocal } from './accountStorage';
 const TASK_FEEDBACK_KEY = 'couple-spin-task-feedback';
 const EVENING_RATINGS_KEY = 'couple-spin-evening-ratings';
 
@@ -13,7 +14,7 @@ type EveningRating = {
 
 function readTaskMap(): TaskFeedbackMap {
   try {
-    const raw = localStorage.getItem(TASK_FEEDBACK_KEY);
+    const raw = accountLocal.getItem(TASK_FEEDBACK_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as TaskFeedbackMap;
     return parsed && typeof parsed === 'object' ? parsed : {};
@@ -29,7 +30,7 @@ export function getTaskFeedback(taskId: string): TaskRating | null {
 export function setTaskFeedback(taskId: string, rating: TaskRating): void {
   try {
     const next = { ...readTaskMap(), [taskId]: rating };
-    localStorage.setItem(TASK_FEEDBACK_KEY, JSON.stringify(next));
+    accountLocal.setItem(TASK_FEEDBACK_KEY, JSON.stringify(next));
   } catch {
     /* ignore */
   }
@@ -37,7 +38,7 @@ export function setTaskFeedback(taskId: string, rating: TaskRating): void {
 
 function readEveningRatings(): EveningRating[] {
   try {
-    const raw = localStorage.getItem(EVENING_RATINGS_KEY);
+    const raw = accountLocal.getItem(EVENING_RATINGS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as EveningRating[];
     return Array.isArray(parsed) ? parsed : [];
@@ -54,7 +55,7 @@ export function saveEveningRating(eveningName: string, stars: number): void {
       { eveningName: label, stars: safeStars, atMs: Date.now() },
       ...readEveningRatings().slice(0, 19),
     ];
-    localStorage.setItem(EVENING_RATINGS_KEY, JSON.stringify(next));
+    accountLocal.setItem(EVENING_RATINGS_KEY, JSON.stringify(next));
   } catch {
     /* ignore */
   }

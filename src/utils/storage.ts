@@ -1,3 +1,4 @@
+import { accountLocal, clearAccountStorage } from './accountStorage';
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
@@ -104,7 +105,7 @@ export function sanitizeSettings(raw: unknown): AppSettings {
 
 function writeJson(key: string, value: unknown): { ok: boolean; error?: string } {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    accountLocal.setItem(key, JSON.stringify(value));
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'storage_write_failed';
@@ -115,7 +116,7 @@ function writeJson(key: string, value: unknown): { ok: boolean; error?: string }
 
 export function loadSettings(): AppSettings {
   try {
-    return sanitizeSettings(safeParse(localStorage.getItem(SETTINGS_KEY)));
+    return sanitizeSettings(safeParse(accountLocal.getItem(SETTINGS_KEY)));
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -127,7 +128,7 @@ export function saveSettings(settings: AppSettings): { ok: boolean; error?: stri
 
 export function loadHistory(): GameHistoryEntry[] {
   try {
-    const parsed = safeParse(localStorage.getItem(HISTORY_KEY));
+    const parsed = safeParse(accountLocal.getItem(HISTORY_KEY));
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((e) => e && typeof e === 'object')
@@ -157,7 +158,7 @@ export function saveHistoryEntry(entry: GameHistoryEntry): { ok: boolean; error?
 
 export function loadRecords(): LocalRecords {
   try {
-    const parsed = safeParse(localStorage.getItem(RECORDS_KEY));
+    const parsed = safeParse(accountLocal.getItem(RECORDS_KEY));
     if (!parsed || typeof parsed !== 'object') {
       return { mostCompleted: 0, longestStreak: 0, totalGames: 0, totalTasks: 0 };
     }
@@ -182,7 +183,7 @@ export function updateRecords(partial: Partial<LocalRecords>): LocalRecords {
 
 export function loadUnlockedAchievements(): string[] {
   try {
-    const parsed = safeParse(localStorage.getItem(ACHIEVEMENTS_KEY));
+    const parsed = safeParse(accountLocal.getItem(ACHIEVEMENTS_KEY));
     if (!Array.isArray(parsed)) return [];
     return [...new Set(parsed.filter((x): x is string => typeof x === 'string' && x.length < 64))];
   } catch {
@@ -197,12 +198,7 @@ export function saveUnlockedAchievements(ids: string[]): { ok: boolean; error?: 
 
 export function clearAllLocalData(): { ok: boolean; error?: string } {
   try {
-    localStorage.removeItem(SETTINGS_KEY);
-    localStorage.removeItem(HISTORY_KEY);
-    localStorage.removeItem(RECORDS_KEY);
-    localStorage.removeItem(ACHIEVEMENTS_KEY);
-    localStorage.removeItem('couple-spin-custom-content');
-    sessionStorage.removeItem('couple-spin-auth-session');
+    clearAccountStorage();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'clear_failed' };

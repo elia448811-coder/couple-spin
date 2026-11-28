@@ -183,9 +183,9 @@ function AppContent() {
   useEffect(() => {
     if (couple.role !== 'partner') return;
     const remote = couple.peekRemoteGame();
-    if (!remote) return;
-    applyRemoteSnapshot(remote, couple.lastEventVersion);
-  }, [couple.role, couple.lastEventVersion, couple.peekRemoteGame, applyRemoteSnapshot]);
+    if (!remote || !couple.room?.roomId) return;
+    applyRemoteSnapshot(couple.room.roomId, remote, couple.lastEventVersion);
+  }, [couple.role, couple.room?.roomId, couple.lastEventVersion, couple.peekRemoteGame, applyRemoteSnapshot]);
 
   const hubStats = {
     totalGames: loadRecords().totalGames,

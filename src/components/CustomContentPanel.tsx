@@ -70,7 +70,7 @@ export function CustomContentPanel({ matureAgeConfirmed }: CustomContentPanelPro
     <div className="settings-group custom-content-panel">
       <span className="settings-label">תוכן מותאם אישית</span>
       <p className="custom-content-panel__hint">
-        הוסיפו שאלות או משימות משלכם — נשמרות במכשיר ומשולבות במשחק לפי קטגוריה.
+        השאלות והמשימות שלכם נשמרות במכשיר ומשולבות במשחק לפי קטגוריה. אם הפעלתם גיבוי, הן יישמרו גם בחשבון.
       </p>
 
       <div className="custom-content-form">

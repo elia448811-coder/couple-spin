@@ -11,15 +11,18 @@ import './styles/hub.css';
 import './styles/toast.css';
 import './styles/admin.css';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <AuthGuard>
-        <ToastProvider>
-          <UpdateBanner />
-          <App />
-        </ToastProvider>
-      </AuthGuard>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+// GitHub Pages serves the SPA without custom response headers. Leave framed pages empty.
+if (window.self === window.top) {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <AuthGuard>
+          <ToastProvider>
+            <UpdateBanner />
+            <App />
+          </ToastProvider>
+        </AuthGuard>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}

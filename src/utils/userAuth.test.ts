@@ -1,13 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as firebase from '../lib/firebase';
 import {
   emailToUsername,
   isValidEmail,
   isValidUsername,
   normalizeUsername,
+  registerWithUsername,
   usernameToEmail,
 } from './userAuth';
 
 describe('userAuth', () => {
+  it('refuses a reserved email before contacting Firebase Auth', async () => {
+    const configured = vi.spyOn(firebase, 'isFirebaseConfigured').mockReturnValue(true);
+    const auth = vi.spyOn(firebase, 'getFirebaseAuth');
+    try {
+      expect((await registerWithUsername(' Elia448811@gmail.com ', 'example')).ok).toBe(false);
+      expect(auth).not.toHaveBeenCalled();
+    } finally {
+      auth.mockRestore();
+      configured.mockRestore();
+    }
+  });
+
   it('validates usernames', () => {
     expect(isValidUsername('dana')).toBe(true);
     expect(isValidUsername('dana_love')).toBe(true);

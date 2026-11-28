@@ -1,14 +1,26 @@
 import assert from 'node:assert/strict';
-import { checkRateLimit, createSessionToken, denySessionToken, isSessionDenied } from '../api/_lib/auth.js';
+import { checkRateLimit, createSessionToken, denySessionToken, isSessionDenied, verifySessionToken } from '../api/_lib/auth.js';
+import joinGuard from '../api/join-guard.js';
+import { verificationKey } from '../shared/auth-core.mjs';
 import worker from '../worker/index.js';
 
+async function joinResponse(method, origin, contentType = 'application/json') {
+  const req = { method, headers: { origin, 'content-type': contentType }, socket: { remoteAddress: 'join-test' } };
+  const res = { setHeader() {}, writeHead(status) { this.statusCode = status; }, end() {} };
+  await joinGuard(req, res);
+  return res.statusCode;
+}
+
 export async function checkAuthStore() {
-  const keys = ['NODE_ENV', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'SESSION_SECRET'];
+  const keys = ['NODE_ENV', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'SESSION_SECRET', 'CURRENT_KID', 'SESSION_SECRETS', 'ALLOWED_ORIGINS'];
   const original = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   const send = globalThis.fetch;
   const records = new Map();
   try {
     process.env.NODE_ENV = 'production';
+    process.env.CURRENT_KID = 'v1';
+    delete process.env.SESSION_SECRETS;
+    process.env.ALLOWED_ORIGINS = 'https://game.example.test';
     process.env.SESSION_SECRET = 'synthetic-test-signing-key';
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -49,6 +61,35 @@ export async function checkAuthStore() {
     assert.equal((await checkRateLimit('test', { requireShared: true, maxAttempts: 1 })).allowed, true);
     assert.equal((await checkRateLimit('test', { requireShared: true, maxAttempts: 1 })).allowed, false);
     assert.equal((await worker.fetch(sessionRequest(), env)).status, 200);
+    const beforeJoin = new Map(records);
+    for (const origin of [undefined, 'null', 'malformed', 'https://elsewhere.example.test', 'https://game.example.test/path']) {
+      assert.equal(await joinResponse('POST', origin), 403);
+      assert.equal(await joinResponse('OPTIONS', origin), 403);
+    }
+    assert.equal(await joinResponse('OPTIONS', process.env.ALLOWED_ORIGINS), 204);
+    assert.equal(await joinResponse('POST', process.env.ALLOWED_ORIGINS, 'text/plain'), 415);
+    assert.deepEqual(records, beforeJoin);
+    assert.equal(await joinResponse('POST', process.env.ALLOWED_ORIGINS), 200);
+    assert.equal(records.size, beforeJoin.size + 1);
+
+    const oldKey = process.env.SESSION_SECRET;
+    process.env.CURRENT_KID = env.CURRENT_KID = 'v2';
+    process.env.SESSION_SECRET = env.SESSION_SECRET = 'synthetic-rotated-key';
+    for (const config of [`v1:${oldKey}`, JSON.stringify({ v1: oldKey })]) {
+      process.env.SESSION_SECRETS = env.SESSION_SECRETS = config;
+      assert.equal(verifySessionToken(undefined, token), true);
+      assert.equal((await worker.fetch(sessionRequest(), env)).status, 200);
+    }
+    for (const kid of ['__proto__', 'constructor', 'toString', 'unknown']) {
+      assert.equal(verificationKey(kid, 'v2', env.SESSION_SECRET, env.SESSION_SECRETS), null);
+      const invalidToken = token.replace(/^v1\./, kid + '.');
+      assert.equal(verifySessionToken(undefined, invalidToken), false);
+      const invalidRequest = new Request('https://example.test/session', { headers: { Authorization: 'Bearer ' + invalidToken } });
+      assert.equal((await worker.fetch(invalidRequest, env)).status, 401);
+    }
+    for (const invalidKey of [true, {}, [], 1, '', null]) {
+      assert.equal(verificationKey('v1', 'v2', env.SESSION_SECRET, JSON.stringify({ v1: invalidKey })), null);
+    }
     await denySessionToken(token);
     assert.equal((await worker.fetch(sessionRequest(), env)).status, 401);
 

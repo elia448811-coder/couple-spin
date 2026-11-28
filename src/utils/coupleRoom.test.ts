@@ -1,3 +1,5 @@
+import { createTestGameState } from './gameSimulator';
+import { builtInContent } from '../data/allContent';
 import { describe, expect, it } from 'vitest';
 import {
   bothPlayersReady,
@@ -6,6 +8,8 @@ import {
   playersFromRoom,
   presenceLabel,
   PRESENCE_TIMEOUT_MS,
+  isValidRoomEvent,
+  extractGameFromEvent,
   sanitizeGameForSync,
   type CoupleRoom,
 } from './coupleRoom';
@@ -64,17 +68,22 @@ describe('coupleRoom helpers', () => {
   it('rejects malformed remote game snapshots', () => {
     expect(isValidRemoteGameState(null)).toBe(false);
     expect(isValidRemoteGameState({ screen: 'game' })).toBe(false);
-    expect(
-      isValidRemoteGameState({
-        screen: 'game',
-        scores: [1, 2],
-        playerOneName: 'א',
-        playerTwoName: 'ב',
-        currentPlayerIndex: 0,
-        usedTaskIds: [],
-        stats: {},
-      }),
-    ).toBe(true);
+    expect(isValidRemoteGameState(createTestGameState())).toBe(true);
+  });
+
+  it('reads a validated server game event', () => {
+    const game = createTestGameState();
+    const event = { id: 'event', version: 1, createdAtMs: 100, createdBy: 'host',
+      type: 'GAME_SNAPSHOT' as const, payload: { gameState: game, screen: game.screen, sparkStreak: game.stats.streak } };
+    expect(isValidRoomEvent(event)).toBe(true);
+    expect(extractGameFromEvent(event)).toEqual(game);
+    expect(isValidRoomEvent({ ...event, version: -1 })).toBe(false);
+    expect(isValidRoomEvent({ ...event, payload: {} })).toBe(false);
+  });
+
+  it('accepts game cards shipped by this client in the shared event schema', () => {
+    const game = createTestGameState();
+    expect(builtInContent.filter(currentTask => !isValidRemoteGameState({ ...game, currentTask }))).toEqual([]);
   });
 
   it('trims long usedTaskIds before sync', () => {

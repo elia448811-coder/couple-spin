@@ -8,6 +8,13 @@ const JOIN_MAX_ATTEMPTS = 30;
 
 export default async function handler(req, res) {
   const headers = cors(req, ['POST', 'OPTIONS']);
+  if (req.method === 'POST' || req.method === 'OPTIONS') {
+    const origin = req.headers.origin;
+    if (!origin || headers['Access-Control-Allow-Origin'] !== origin) {
+      json(res, 403, { ok: false, error: 'origin_forbidden' }, headers);
+      return;
+    }
+  }
   if (req.method === 'OPTIONS') {
     res.writeHead(204, headers);
     res.end();
@@ -15,6 +22,11 @@ export default async function handler(req, res) {
   }
   if (req.method !== 'POST') {
     methodNotAllowed(res, ['POST', 'OPTIONS'], headers);
+    return;
+  }
+
+  if (String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase() !== 'application/json') {
+    json(res, 415, { ok: false, error: 'expected_json' }, headers);
     return;
   }
 

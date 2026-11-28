@@ -1,0 +1,11 @@
+{
+  "name": "couple-spin-firebase-tools",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1"
+  }
+}
